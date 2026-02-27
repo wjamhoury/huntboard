@@ -18,6 +18,7 @@ from app.database import engine, Base, SessionLocal
 from app.routers import jobs, resumes, feeds, ai, companies, analytics, batch, sources, users, admin
 from app.middleware.error_handler import ErrorHandlerMiddleware
 from app.middleware.request_logger import RequestLoggerMiddleware
+from app.middleware.security_headers import SecurityHeadersMiddleware
 from app.models.batch_run import BatchRun  # Import to register model
 
 # Scheduler (extracted to avoid circular imports)
@@ -83,6 +84,9 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Security headers middleware (adds X-Frame-Options, CSP, etc.)
+app.add_middleware(SecurityHeadersMiddleware)
 
 # Error handler middleware (catches unhandled exceptions)
 app.add_middleware(ErrorHandlerMiddleware)

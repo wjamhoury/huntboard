@@ -1503,3 +1503,192 @@ Note: Backend `SENTRY_DSN` should be set directly in the EC2 production `.env` f
 ssh -i ~/.ssh/huntboard-ec2.pem ec2-user@44.206.144.96 \
   'docker compose logs backend 2>&1 | grep "a1b2c3d4"'
 ```
+
+### Frontend Sentry: Non-Blocking Dynamic Import
+
+**CRITICAL**: Sentry must be loaded via dynamic import to prevent production crashes.
+
+The frontend uses `import('@sentry/react')` instead of a static import because:
+1. If Sentry fails to load, the app still works
+2. Sentry is only initialized when `VITE_SENTRY_DSN` is set
+3. Uses `window.__SENTRY__` global for access from ErrorBoundary and error handlers
+
+```javascript
+// CORRECT: Dynamic import (non-blocking)
+if (SENTRY_DSN) {
+  import('@sentry/react').then((Sentry) => {
+    Sentry.init({ dsn: SENTRY_DSN, ... })
+    window.__SENTRY__ = Sentry
+  }).catch((err) => {
+    console.warn('Failed to load Sentry:', err)
+  })
+}
+
+// WRONG: Static import (can crash app if Sentry has issues)
+import * as Sentry from '@sentry/react'
+```
+
+## Common Deployment Issues
+
+### GitHub Actions vs Manual Deploy Differences
+
+**CRITICAL**: Ensure environment variables in `.github/workflows/deploy.yml` match `scripts/deploy-frontend.sh`:
+
+| Variable | Correct Value | Common Mistake |
+|----------|---------------|----------------|
+| `VITE_API_URL` | `https://huntboard.app/api/v1` | Missing `/api/v1` suffix |
+| `VITE_AUTH_DEV_MODE` | `false` | Setting to `true` in production |
+
+If the site crashes after GitHub Actions deploy but works after manual deploy, check the env vars in deploy.yml first.
+
+### GitHub Actions ARM64 Build for EC2
+
+The EC2 instance runs ARM64 (Graviton), but GitHub Actions runners are x86_64. The deploy workflow uses QEMU emulation:
+
+```yaml
+- name: Set up QEMU for ARM64 builds
+  uses: docker/setup-qemu-action@v3
+
+- name: Set up Docker Buildx
+  uses: docker/setup-buildx-action@v3
+
+- name: Build and push to ECR
+  uses: docker/build-push-action@v5
+  with:
+    platforms: linux/arm64  # Required for EC2 ARM64
+```
+
+If you see `exec format error` when the container starts, the image was built for the wrong architecture.
+
+### GitHub Actions paths-filter
+
+The deploy workflow uses `dorny/paths-filter` to only deploy changed components:
+- Backend deploys if `backend/**` changed
+- Frontend deploys if `frontend/**` changed
+
+To force a frontend deploy when only workflow files changed, make a trivial change to a frontend file (e.g., add a comment).
+
+### EC2 SSH Access for GitHub Actions
+
+The security group must allow SSH from GitHub Actions runners. Currently set to `0.0.0.0/0` for port 22. If deployments fail with SSH timeout:
+
+1. Check security group allows inbound SSH
+2. Verify EC2 instance is running
+3. Check EC2 SSH key in GitHub secrets matches the actual key
+
+## Security Hardening
+
+### Security Headers
+
+All HTTP responses include the following security headers via `SecurityHeadersMiddleware`:
+
+| Header | Value | Purpose |
+|--------|-------|---------|
+| `X-Content-Type-Options` | `nosniff` | Prevents MIME type sniffing |
+| `X-Frame-Options` | `DENY` | Prevents clickjacking |
+| `X-XSS-Protection` | `1; mode=block` | Legacy XSS protection |
+| `Referrer-Policy` | `strict-origin-when-cross-origin` | Controls referrer leakage |
+| `Permissions-Policy` | `camera=(), microphone=(), geolocation=()` | Disables unused APIs |
+| `Content-Security-Policy` | Configured for app needs | Restricts resource loading |
+
+### CORS Configuration
+
+CORS is configured to only allow:
+- `http://localhost:5173` (local dev)
+- `http://localhost:3000` (alternative local dev)
+- `FRONTEND_URL` environment variable (production: `https://huntboard.app`)
+
+No wildcard (`*`) origins are allowed. `allow_credentials=True` enables cookie/auth header support.
+
+### Rate Limiting
+
+Rate limits are implemented using `slowapi`:
+
+| Endpoint Type | Limit | Key |
+|---------------|-------|-----|
+| Public endpoints (health, templates) | 30/minute | Per IP |
+| Standard authenticated endpoints | 100/minute | Per user |
+| File uploads (resumes) | 5/minute | Per IP |
+| URL scraping (import-url) | 10/minute | Per IP |
+| AI operations | 10/minute | Per IP |
+
+Rate limit configuration is defined in `backend/app/middleware/rate_limiter.py`.
+
+### Input Validation
+
+All Pydantic schemas enforce field length limits:
+
+| Field Type | Max Length |
+|------------|------------|
+| Job title | 500 chars |
+| Job description | 50,000 chars |
+| Notes (all types) | 10,000 chars |
+| URLs | 2,000 chars |
+| Short text fields | 500 chars |
+| Company slugs | 100 chars (alphanumeric + hyphens only) |
+| Search/filter inputs | 200 chars |
+| Location | 300 chars |
+
+URL fields are validated to require `http://` or `https://` prefix.
+
+### XSS Prevention
+
+- **React auto-escaping**: All React output is auto-escaped by default
+- **DOMPurify**: Job descriptions that contain HTML are sanitized with DOMPurify before rendering
+  - Allowed tags: `p`, `br`, `strong`, `b`, `em`, `i`, `u`, `ul`, `ol`, `li`, `a`, `h1-h6`, `span`, `div`
+  - Allowed attributes: `href`, `target`, `rel`, `class`
+  - Data attributes: disabled
+
+Usage in `JobDetailPage.jsx`:
+```javascript
+import DOMPurify from 'dompurify'
+const sanitizedHtml = DOMPurify.sanitize(htmlContent, {
+  ALLOWED_TAGS: ['p', 'br', 'strong', ...],
+  ALLOWED_ATTR: ['href', 'target', 'rel', 'class'],
+  ALLOW_DATA_ATTR: false,
+})
+```
+
+### SQL Injection Protection
+
+All database queries use SQLAlchemy ORM with parameterized queries. No raw SQL with string interpolation.
+
+The only `text()` usage is in the health check: `db.execute(text("SELECT 1"))`.
+
+### S3 Security
+
+- **Presigned URLs**: Expire after 1 hour (3600 seconds)
+- **Server-side encryption**: All uploads use AES256 encryption
+- **Authentication required**: Only authenticated users can generate presigned URLs
+- **User-scoped keys**: S3 keys include user ID in path (`resumes/{user_id}/...`)
+
+### Dependency Security Audits
+
+Run these commands periodically to check for vulnerabilities:
+
+```bash
+# Frontend (npm)
+cd frontend && npm audit
+
+# Backend (pip-audit)
+docker compose exec backend pip-audit
+
+# Or if running locally
+cd backend && pip install pip-audit && pip-audit
+```
+
+**Current status** (as of security hardening):
+- Frontend: Fixed rollup and fast-xml-parser vulnerabilities
+- Backend: Updated python-multipart (>=0.0.22), pypdf (>=6.7.3), sentry-sdk (>=2.8.0)
+
+### Secrets Management
+
+- **No secrets in code**: All sensitive values read from environment variables
+- **`.gitignore`** excludes: `.env`, `*.env`, `terraform.tfvars`, `*.pem`
+- **Production secrets**: Stored in `/opt/huntboard/.env` on EC2
+
+Key environment variables with secrets:
+- `DATABASE_URL` - PostgreSQL connection string
+- `ANTHROPIC_API_KEY` - AI API key
+- `JWT_SECRET` - For signing email tokens
+- `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` - For S3 (if not using IAM roles)

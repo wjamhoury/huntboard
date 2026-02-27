@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import toast from 'react-hot-toast'
+import DOMPurify from 'dompurify'
 import {
   ArrowLeftIcon,
   MapPinIcon,
@@ -150,12 +151,19 @@ function DescriptionTab({ job }) {
   // Check if description contains HTML
   const containsHtml = /<[a-z][\s\S]*>/i.test(description)
 
+  // Sanitize HTML content to prevent XSS attacks
+  const sanitizedHtml = containsHtml ? DOMPurify.sanitize(displayText, {
+    ALLOWED_TAGS: ['p', 'br', 'strong', 'b', 'em', 'i', 'u', 'ul', 'ol', 'li', 'a', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'span', 'div'],
+    ALLOWED_ATTR: ['href', 'target', 'rel', 'class'],
+    ALLOW_DATA_ATTR: false,
+  }) : ''
+
   return (
     <div className="space-y-4">
       {containsHtml ? (
         <div
           className="prose prose-sm dark:prose-invert max-w-none"
-          dangerouslySetInnerHTML={{ __html: displayText }}
+          dangerouslySetInnerHTML={{ __html: sanitizedHtml }}
         />
       ) : (
         <p className="text-gray-700 dark:text-gray-300 whitespace-pre-wrap">{displayText}</p>

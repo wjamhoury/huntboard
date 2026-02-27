@@ -1,27 +1,66 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, Field, field_validator
 from typing import Optional, Dict, Any
 from datetime import datetime
+import re
+
+
+# Input validation constants
+MAX_NAME_LENGTH = 200
+MAX_EMAIL_LENGTH = 320
+MAX_URL_LENGTH = 2000
 
 
 class UserPreferences(BaseModel):
     """User preferences schema."""
-    default_sort: Optional[str] = "date_desc"  # score_desc, score_asc, date_desc, date_asc, company_asc
-    auto_archive_days: Optional[int] = 30  # Days after which to auto-archive (0 = disabled)
-    auto_archive_min_score: Optional[int] = 0  # Minimum score to auto-archive (0 = disabled)
+    default_sort: Optional[str] = Field(default="date_desc", max_length=50)
+    auto_archive_days: Optional[int] = Field(default=30, ge=0, le=365)
+    auto_archive_min_score: Optional[int] = Field(default=0, ge=0, le=100)
     # Email digest preferences
-    email_digest: Optional[str] = "weekly"  # "daily", "weekly", "never"
-    email_digest_min_score: Optional[int] = 60  # Only include jobs scoring above this
-    email_digest_day: Optional[str] = "monday"  # For weekly: which day to send
+    email_digest: Optional[str] = Field(default="weekly", max_length=20)
+    email_digest_min_score: Optional[int] = Field(default=60, ge=0, le=100)
+    email_digest_day: Optional[str] = Field(default="monday", max_length=20)
+
+    @field_validator("default_sort")
+    @classmethod
+    def validate_default_sort(cls, v: Optional[str]) -> Optional[str]:
+        valid_sorts = ["score_desc", "score_asc", "date_desc", "date_asc", "company_asc"]
+        if v and v not in valid_sorts:
+            raise ValueError(f"default_sort must be one of: {', '.join(valid_sorts)}")
+        return v
+
+    @field_validator("email_digest")
+    @classmethod
+    def validate_email_digest(cls, v: Optional[str]) -> Optional[str]:
+        valid_options = ["daily", "weekly", "never"]
+        if v and v not in valid_options:
+            raise ValueError(f"email_digest must be one of: {', '.join(valid_options)}")
+        return v
+
+    @field_validator("email_digest_day")
+    @classmethod
+    def validate_email_digest_day(cls, v: Optional[str]) -> Optional[str]:
+        valid_days = ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"]
+        if v and v.lower() not in valid_days:
+            raise ValueError(f"email_digest_day must be one of: {', '.join(valid_days)}")
+        return v.lower() if v else v
 
 
 class UserBase(BaseModel):
-    email: str
-    full_name: Optional[str] = None
-    avatar_url: Optional[str] = None
+    email: str = Field(..., max_length=MAX_EMAIL_LENGTH)
+    full_name: Optional[str] = Field(default=None, max_length=MAX_NAME_LENGTH)
+    avatar_url: Optional[str] = Field(default=None, max_length=MAX_URL_LENGTH)
+
+    @field_validator("email")
+    @classmethod
+    def validate_email(cls, v: str) -> str:
+        """Basic email validation."""
+        if not re.match(r"^[^@]+@[^@]+\.[^@]+$", v):
+            raise ValueError("Invalid email format")
+        return v.lower()
 
 
 class UserCreate(UserBase):
-    id: str  # Cognito sub UUID
+    id: str = Field(..., min_length=1, max_length=100)  # Cognito sub UUID
 
 
 class UserResponse(BaseModel):
@@ -39,7 +78,7 @@ class UserResponse(BaseModel):
 
 
 class UserUpdate(BaseModel):
-    full_name: Optional[str] = None
-    avatar_url: Optional[str] = None
+    full_name: Optional[str] = Field(default=None, max_length=MAX_NAME_LENGTH)
+    avatar_url: Optional[str] = Field(default=None, max_length=MAX_URL_LENGTH)
     onboarding_complete: Optional[bool] = None
     preferences: Optional[Dict[str, Any]] = None

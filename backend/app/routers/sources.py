@@ -4,9 +4,11 @@ Sources router - provides access to source templates for user onboarding.
 Templates are curated lists of popular job sources (companies, RSS feeds)
 that users can browse and add to their own accounts.
 """
-from fastapi import APIRouter, Query, Depends
+from fastapi import APIRouter, Query, Depends, Request
 from sqlalchemy.orm import Session
 from typing import Optional, Tuple
+from slowapi import Limiter
+from slowapi.util import get_remote_address
 
 from app.dependencies import get_user_db
 from app.models.resume import Resume
@@ -14,11 +16,19 @@ from app.models.user import User
 from app.services.source_templates import get_all_templates, search_templates
 from app.services.resume_analyzer import analyze_resume_for_sources
 
+# Input validation constants
+MAX_SEARCH_LENGTH = 200
+
+limiter = Limiter(key_func=get_remote_address)
 router = APIRouter()
 
 
 @router.get("/templates")
-def get_templates(search: Optional[str] = Query(None, description="Search templates by name, slug, or category")):
+@limiter.limit("30/minute")
+def get_templates(
+    request: Request,
+    search: Optional[str] = Query(None, max_length=MAX_SEARCH_LENGTH, description="Search templates by name, slug, or category")
+):
     """
     Get available source templates.
 

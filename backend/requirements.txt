@@ -17,9 +17,9 @@ slowapi==0.1.9
 boto3==1.42.44
 
 # File handling
-python-multipart==0.0.6
+python-multipart>=0.0.22
 aiofiles==23.2.1
-pypdf==5.1.0
+pypdf>=6.7.3
 
 # HTTP & Web scraping
 httpx==0.27.0
@@ -34,4 +34,4 @@ python-dotenv==1.0.0
 apscheduler==3.10.4
 
 # Error monitoring
-sentry-sdk[fastapi]==1.40.0
+sentry-sdk[fastapi]>=2.8.0

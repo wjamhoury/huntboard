@@ -33,20 +33,25 @@ def log_activity(db: Session, job_id: int, user_id: str, action: str, detail: st
     # Don't commit here - let the calling function handle the transaction
 
 
+# Input validation constants for query parameters
+MAX_SEARCH_LENGTH = 200
+MAX_FILTER_LENGTH = 100
+
+
 @router.get("", response_model=List[JobResponse])
 def get_jobs(
-    status: Optional[str] = Query(None, description="Filter by status (comma-separated for multiple)"),
-    priority: Optional[int] = Query(None),
-    search: Optional[str] = Query(None, description="Legacy search parameter (same as keyword)"),
+    status: Optional[str] = Query(None, max_length=MAX_FILTER_LENGTH, description="Filter by status (comma-separated for multiple)"),
+    priority: Optional[int] = Query(None, ge=1, le=5),
+    search: Optional[str] = Query(None, max_length=MAX_SEARCH_LENGTH, description="Legacy search parameter (same as keyword)"),
     applied: Optional[bool] = Query(None),
     # New filter parameters
-    location: Optional[str] = Query(None, description="Filter by location text (case-insensitive)"),
-    keyword: Optional[str] = Query(None, description="Search title, description, and company"),
+    location: Optional[str] = Query(None, max_length=MAX_SEARCH_LENGTH, description="Filter by location text (case-insensitive)"),
+    keyword: Optional[str] = Query(None, max_length=MAX_SEARCH_LENGTH, description="Search title, description, and company"),
     min_score: Optional[int] = Query(None, ge=0, le=100, description="Minimum AI match score"),
     max_score: Optional[int] = Query(None, ge=0, le=100, description="Maximum AI match score"),
-    source: Optional[str] = Query(None, description="Filter by job source (e.g., greenhouse, workday, manual)"),
+    source: Optional[str] = Query(None, max_length=MAX_FILTER_LENGTH, description="Filter by job source (e.g., greenhouse, workday, manual)"),
     remote_only: Optional[bool] = Query(None, description="Filter to only remote jobs"),
-    sort: Optional[str] = Query(None, description="Sort order: score_desc, score_asc, date_desc, date_asc, company_asc"),
+    sort: Optional[str] = Query(None, max_length=50, description="Sort order: score_desc, score_asc, date_desc, date_asc, company_asc"),
     user_db: Tuple[Session, User] = Depends(get_user_db)
 ):
     """
