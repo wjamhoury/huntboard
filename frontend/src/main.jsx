@@ -7,7 +7,7 @@ import ReactDOM from 'react-dom/client'
 import App from './App.jsx'
 import './index.css'
 
-// Initialize Sentry if DSN is configured
+// Initialize Sentry if DSN is configured (non-blocking dynamic import)
 const SENTRY_DSN = import.meta.env.VITE_SENTRY_DSN
 if (SENTRY_DSN) {
   import('@sentry/react').then((Sentry) => {
