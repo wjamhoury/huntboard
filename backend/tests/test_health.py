@@ -25,7 +25,9 @@ def test_health_check_returns_200(db: Session):
     data = response.json()
     assert data["status"] == "healthy"
     assert "version" in data
-    assert data["database"] == "connected"
+    assert "checks" in data
+    assert data["checks"]["database"] == "connected"
+    assert "uptime_seconds" in data
 
 
 def test_health_check_includes_version(db: Session):
