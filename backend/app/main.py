@@ -43,6 +43,7 @@ else:
 
 # Track app start time for uptime calculation
 APP_START_TIME = time.time()
+APP_VERSION = "1.0.0"
 
 # Rate limiter
 limiter = Limiter(key_func=get_remote_address)
