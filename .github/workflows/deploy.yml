@@ -86,7 +86,7 @@ jobs:
       - name: Build
         working-directory: frontend
         env:
-          VITE_API_URL: https://huntboard.app
+          VITE_API_URL: https://huntboard.app/api/v1
           VITE_COGNITO_USER_POOL_ID: ${{ secrets.COGNITO_USER_POOL_ID }}
           VITE_COGNITO_CLIENT_ID: ${{ secrets.COGNITO_CLIENT_ID }}
           VITE_COGNITO_DOMAIN: ${{ secrets.COGNITO_DOMAIN }}
