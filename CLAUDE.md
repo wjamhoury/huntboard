@@ -1121,13 +1121,16 @@ Runs on push to `main` (and can be triggered manually via `workflow_dispatch`):
 
 1. **detect-changes**: Uses `dorny/paths-filter` to determine if backend or frontend changed
 2. **deploy-backend**: Only if `backend/**` changed:
-   - Builds ARM64 Docker image
+   - Sets up QEMU + Docker Buildx for ARM64 cross-compilation (required because GitHub runners are x86_64)
+   - Builds ARM64 Docker image using `docker/build-push-action`
    - Pushes to ECR with `latest` and commit SHA tags
    - SSHs to EC2, pulls new image, runs migrations, health check
 3. **deploy-frontend**: Only if `frontend/**` changed:
-   - Builds with production env vars
+   - Builds with production env vars (including `VITE_SENTRY_DSN` from secrets)
    - Syncs to S3 with cache headers
    - Invalidates CloudFront cache
+
+**Note:** The backend build requires QEMU emulation because the EC2 instance is ARM64 (Graviton) but GitHub Actions runners are x86_64. The workflow uses `docker/setup-qemu-action` and `docker/setup-buildx-action` to enable cross-platform builds.
 
 ### Running Tests Locally
 
@@ -1177,6 +1180,7 @@ Add these secrets in GitHub repo → Settings → Secrets and variables → Acti
 | `COGNITO_DOMAIN` | `huntboard.auth.us-east-1.amazoncognito.com` | Terraform output |
 | `FRONTEND_BUCKET` | `huntboard-frontend-1ad1715d` | Terraform output |
 | `CLOUDFRONT_DISTRIBUTION_ID` | `E3BXS7N5PX4WPF` | Terraform output |
+| `VITE_SENTRY_DSN` | Frontend Sentry DSN | Sentry project settings |
 
 ### Deployment Flow
 
