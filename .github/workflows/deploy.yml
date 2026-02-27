@@ -38,12 +38,19 @@ jobs:
           aws-region: us-east-1
       - uses: aws-actions/amazon-ecr-login@v2
         id: ecr
+      - name: Set up QEMU for ARM64 builds
+        uses: docker/setup-qemu-action@v3
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
       - name: Build and push to ECR
-        run: |
-          ECR_REPO=${{ steps.ecr.outputs.registry }}/huntboard-backend
-          docker build --platform linux/arm64 -t $ECR_REPO:latest -t $ECR_REPO:${{ github.sha }} backend/
-          docker push $ECR_REPO:latest
-          docker push $ECR_REPO:${{ github.sha }}
+        uses: docker/build-push-action@v5
+        with:
+          context: backend
+          platforms: linux/arm64
+          push: true
+          tags: |
+            ${{ steps.ecr.outputs.registry }}/huntboard-backend:latest
+            ${{ steps.ecr.outputs.registry }}/huntboard-backend:${{ github.sha }}
       - name: Deploy to EC2
         uses: appleboy/ssh-action@v1
         with:
