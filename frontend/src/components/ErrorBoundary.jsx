@@ -1,5 +1,4 @@
 import { Component } from 'react'
-import * as Sentry from '@sentry/react'
 
 /**
  * Error boundary component that catches React render errors
@@ -22,14 +21,18 @@ class ErrorBoundary extends Component {
     console.error('ErrorBoundary caught an error:', error, errorInfo)
     this.setState({ errorInfo })
 
-    // Send to Sentry if configured
-    if (import.meta.env.VITE_SENTRY_DSN) {
-      const eventId = Sentry.captureException(error, {
-        extra: {
-          componentStack: errorInfo?.componentStack,
-        },
-      })
-      this.setState({ eventId })
+    // Send to Sentry if configured (loaded dynamically in main.jsx)
+    if (window.__SENTRY__) {
+      try {
+        const eventId = window.__SENTRY__.captureException(error, {
+          extra: {
+            componentStack: errorInfo?.componentStack,
+          },
+        })
+        this.setState({ eventId })
+      } catch (e) {
+        console.warn('Failed to report error to Sentry:', e)
+      }
     }
   }
 
@@ -43,8 +46,12 @@ class ErrorBoundary extends Component {
 
   handleReportIssue = () => {
     // Open Sentry user feedback dialog if available
-    if (import.meta.env.VITE_SENTRY_DSN && this.state.eventId) {
-      Sentry.showReportDialog({ eventId: this.state.eventId })
+    if (window.__SENTRY__ && this.state.eventId) {
+      try {
+        window.__SENTRY__.showReportDialog({ eventId: this.state.eventId })
+      } catch (e) {
+        window.open('https://github.com/anthropics/claude-code/issues', '_blank')
+      }
     } else {
       // Fallback to GitHub issues
       window.open('https://github.com/anthropics/claude-code/issues', '_blank')
