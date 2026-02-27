@@ -1,0 +1,51 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+body {
+  min-height: 100vh;
+}
+
+/* Hide scrollbar for mobile horizontal scroll */
+.scrollbar-hide {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
+}
+
+/* Vertical writing mode for collapsed columns */
+.writing-mode-vertical {
+  writing-mode: vertical-rl;
+  text-orientation: mixed;
+}
+
+/* Safe area insets for iOS devices */
+.safe-area-pb {
+  padding-bottom: env(safe-area-inset-bottom);
+}
+
+/* Touch action for swipe cards */
+.touch-pan-y {
+  touch-action: pan-y;
+}
+
+/* Prevent text selection during drag */
+.select-none {
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+/* Mobile modal full screen */
+@media (max-width: 767px) {
+  .mobile-modal-full {
+    position: fixed;
+    inset: 0;
+    border-radius: 0;
+    max-width: 100%;
+    max-height: 100%;
+    margin: 0;
+  }
+}

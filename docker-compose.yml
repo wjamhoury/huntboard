@@ -1,0 +1,83 @@
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: huntboard-db
+    environment:
+      - POSTGRES_DB=huntboard
+      - POSTGRES_USER=huntboard
+      - POSTGRES_PASSWORD=huntboard_dev_password
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U huntboard"]
+      interval: 10s
+      timeout: 5s
+      start_period: 10s
+      retries: 5
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./backend:/app
+      - uploads_data:/app/uploads
+    env_file:
+      - .env
+    environment:
+      - DATABASE_URL=postgresql://huntboard:huntboard_dev_password@db:5432/huntboard
+      - TZ=America/New_York
+      - S3_RESUME_BUCKET=${S3_RESUME_BUCKET:-huntboard-resumes-dev}
+      - AWS_REGION=${AWS_REGION:-us-east-1}
+      - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
+      - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
+      # Set USE_LOCAL_STORAGE=true if you don't have AWS credentials configured
+      - USE_LOCAL_STORAGE=${USE_LOCAL_STORAGE:-false}
+      - AUTH_DEV_MODE=true
+      - COGNITO_USER_POOL_ID=${COGNITO_USER_POOL_ID}
+      - COGNITO_APP_CLIENT_ID=${COGNITO_APP_CLIENT_ID}
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/docs"]
+      interval: 30s
+      timeout: 5s
+      start_period: 10s
+      retries: 3
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    ports:
+      - "5173:5173"
+    volumes:
+      - ./frontend/src:/app/src
+      - ./frontend/public:/app/public
+      - ./frontend/.env:/app/.env:ro
+    environment:
+      - VITE_API_URL=http://localhost:8000/api/v1
+      - VITE_AUTH_DEV_MODE=true
+    restart: unless-stopped
+    depends_on:
+      backend:
+        condition: service_healthy
+    command: npm run dev -- --host
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5173"]
+      interval: 30s
+      timeout: 5s
+      start_period: 10s
+      retries: 3
+
+volumes:
+  postgres_data:
+  uploads_data:

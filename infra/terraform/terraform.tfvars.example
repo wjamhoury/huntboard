@@ -1,0 +1,10 @@
+aws_region       = "us-east-1"
+domain_name      = "huntboard.app"
+instance_type    = "t4g.micro"
+ssh_key_name     = "huntboard-ec2"
+my_ip            = "YOUR_IP_HERE/32"
+
+# Sensitive — do NOT commit real values. Use terraform.tfvars (gitignored)
+db_password       = "CHANGE_ME_strong_password_here"
+anthropic_api_key = ""
+serpapi_key       = ""
