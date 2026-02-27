@@ -1,89 +1,69 @@
 # HuntBoard
 
-HuntBoard — AI-powered job search tracker and career pipeline manager.
+AI-powered job search tracker and career pipeline manager. Features Kanban board, AI job scoring via Anthropic API, resume management, RSS/company career page feed importing, and batch processing.
+
+**Live at**: [huntboard.app](https://huntboard.app)
 
 ## Features
 
-- 📋 Kanban board with drag-and-drop
-- 🌙 Dark mode (with toggle)
-- ➕ Add, edit, and delete jobs
-- 🔍 Filter and search jobs
-- 📊 Track application status
-- 💰 Salary tracking
-- 📝 Notes for each job
+- **Kanban Board** — Drag-and-drop job tracking across statuses (New, Saved, Reviewing, Applied, Interviewing, Offer, Rejected, Archived)
+- **AI Match Scoring** — Upload your resume and get AI-powered match scores for each job
+- **Swipe to Triage** — Tinder-style card swiping to quickly review new jobs
+- **Auto-Import Jobs** — Import from Greenhouse, Workday, Lever career pages and RSS feeds
+- **Nightly Sync** — Automatic job syncing with configurable schedule
+- **Email Digests** — Daily/weekly email summaries of new high-scoring jobs
+- **Dark Mode** — System-aware with manual toggle
+- **Mobile Responsive** — Full mobile support with bottom navigation and touch gestures
 
-## Quick Start (Docker - Recommended)
+## Tech Stack
+
+- **Frontend**: React 18, Vite, Tailwind CSS, React Query, dnd-kit
+- **Backend**: Python FastAPI, SQLAlchemy ORM, PostgreSQL
+- **Auth**: AWS Cognito
+- **Infrastructure**: AWS (EC2 ARM64, S3, CloudFront, ECR)
+- **CI/CD**: GitHub Actions
+
+## Quick Start (Local Development)
 
 ### Prerequisites
 
-1. **Install Docker Desktop**: https://www.docker.com/products/docker-desktop
-2. **Start Docker Desktop** and make sure it's running
+- Docker Desktop: https://www.docker.com/products/docker-desktop
+- Node.js 20+ (for frontend development)
 
 ### Setup
 
 ```bash
-# 1. Navigate to the project folder
+# Clone the repo
+git clone https://github.com/wjamhoury/huntboard.git
 cd huntboard
 
-# 2. Run the setup script
-./setup.sh
-```
+# Copy environment template
+cp .env.example .env
 
-That's it! Open http://localhost:5173 in your browser.
-
-### Commands
-
-```bash
-# Stop the app
-docker compose down
-
-# Start the app
+# Start all services
 docker compose up -d
 
 # View logs
 docker compose logs -f
+```
 
-# Rebuild after changes
+Open http://localhost:5173 in your browser. Auth is bypassed in dev mode.
+
+### Commands
+
+```bash
+# Stop all services
+docker compose down
+
+# Rebuild after dependency changes
 docker compose build --no-cache && docker compose up -d
+
+# Run backend tests
+docker compose exec -e AUTH_DEV_MODE=true backend python -m pytest -v tests/
+
+# Run database migrations
+docker compose exec backend alembic upgrade head
 ```
-
----
-
-## Manual Setup (Without Docker)
-
-If you prefer not to use Docker:
-
-### Backend Setup
-
-```bash
-cd backend
-
-# Create virtual environment
-python3 -m venv venv
-source venv/bin/activate  # On Windows: venv\Scripts\activate
-
-# Install dependencies
-pip install -r requirements.txt
-
-# Run the backend
-uvicorn app.main:app --reload --port 8000
-```
-
-### Frontend Setup
-
-```bash
-cd frontend
-
-# Install dependencies
-npm install
-
-# Run the frontend
-npm run dev
-```
-
-Open http://localhost:5173 in your browser.
-
----
 
 ## Project Structure
 
@@ -91,64 +71,77 @@ Open http://localhost:5173 in your browser.
 huntboard/
 ├── backend/
 │   ├── app/
-│   │   ├── main.py          # FastAPI app
-│   │   ├── database.py      # SQLite config
-│   │   ├── models/          # SQLAlchemy models
-│   │   ├── schemas/         # Pydantic schemas
-│   │   └── routers/         # API endpoints
-│   ├── requirements.txt
-│   └── Dockerfile
+│   │   ├── main.py           # FastAPI app entry point
+│   │   ├── auth.py           # Cognito JWT validation
+│   │   ├── models/           # SQLAlchemy models
+│   │   ├── schemas/          # Pydantic schemas
+│   │   ├── routers/          # API route handlers
+│   │   ├── services/         # Business logic (AI scoring, syncing, etc.)
+│   │   └── middleware/       # Request logging, error handling
+│   ├── tests/                # pytest test suite
+│   ├── alembic/              # Database migrations
+│   └── requirements.txt
 ├── frontend/
 │   ├── src/
-│   │   ├── App.jsx          # Main React component
-│   │   └── services/api.js  # API client
-│   ├── package.json
-│   └── Dockerfile
-├── docker-compose.yml
-└── setup.sh
+│   │   ├── auth/             # Auth pages and context
+│   │   ├── components/       # Reusable React components
+│   │   ├── hooks/            # React Query hooks
+│   │   ├── pages/            # Page components
+│   │   └── services/api.js   # API client
+│   └── package.json
+├── infra/terraform/          # AWS infrastructure as code
+├── scripts/                  # Deployment scripts
+├── .github/workflows/        # CI/CD pipelines
+└── docker-compose.yml        # Local development
 ```
 
-## API Endpoints
+## API Documentation
 
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| GET | /api/jobs | List all jobs |
-| GET | /api/jobs/{id} | Get single job |
-| POST | /api/jobs | Create job |
-| PUT | /api/jobs/{id} | Update job |
-| PATCH | /api/jobs/{id}/status | Update status only |
-| DELETE | /api/jobs/{id} | Delete job |
-| GET | /api/health | Health check |
+When running locally, visit http://localhost:8000/docs for Swagger UI.
 
-## Tech Stack
+Key endpoints:
+- `GET /api/v1/jobs` — List jobs with filtering and sorting
+- `POST /api/v1/jobs` — Create a job
+- `GET /api/v1/resumes` — List user's resumes
+- `POST /api/v1/feeds` — Add an RSS feed
+- `POST /api/v1/companies` — Add a company feed (Greenhouse/Workday/Lever)
+- `POST /api/v1/batch/sync` — Trigger manual sync
+- `GET /api/health` — Health check
 
-- **Backend**: Python, FastAPI, SQLAlchemy, SQLite
-- **Frontend**: React, Tailwind CSS, @dnd-kit
-- **Infrastructure**: Docker, Docker Compose
+## Deployment
 
-## Troubleshooting
+Deployments are automated via GitHub Actions on push to `main`. See `CLAUDE.md` for detailed deployment documentation.
 
-### "Port already in use"
+Manual deployment:
 ```bash
-# Find what's using the port
-lsof -i :8000  # or :5173
-
-# Kill it
-kill -9 <PID>
+make deploy-backend   # Deploy backend only
+make deploy-frontend  # Deploy frontend only
+make deploy-all       # Deploy both
 ```
 
-### "Docker not running"
-Open Docker Desktop and wait for it to start completely.
+## Security
 
-### "Frontend can't connect to backend"
-Make sure both containers are running:
-```bash
-docker compose ps
-```
+HuntBoard implements defense-in-depth security measures:
 
-### Clear everything and start fresh
-```bash
-docker compose down -v
-docker compose build --no-cache
-docker compose up -d
-```
+- **Security Headers** — X-Content-Type-Options, X-Frame-Options, CSP, and more
+- **Input Validation** — All inputs validated with Pydantic schemas and length limits
+- **XSS Prevention** — DOMPurify sanitization for HTML content
+- **SQL Injection Protection** — SQLAlchemy ORM with parameterized queries only
+- **Rate Limiting** — Per-user and per-IP rate limits via slowapi
+- **CORS** — Strict origin allowlist, no wildcards
+- **S3 Security** — Presigned URLs with 1-hour expiry, server-side encryption
+
+For security vulnerability reports, please email [security contact] or open a private GitHub issue.
+
+See `CLAUDE.md` for detailed security documentation.
+
+## Contributing
+
+1. Fork the repository
+2. Create a feature branch
+3. Make changes with tests
+4. Submit a pull request
+
+## License
+
+MIT
