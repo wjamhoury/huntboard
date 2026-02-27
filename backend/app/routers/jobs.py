@@ -14,6 +14,7 @@ from app.models.user import User
 from app.schemas.job import JobCreate, JobUpdate, JobResponse, StatusUpdate, JobActivityResponse
 from app.services.job_scraper import scrape_job_url
 from app.services.location_parser import update_job_location
+from app.services.usage_tracker import track_event
 
 logger = logging.getLogger(__name__)
 limiter = Limiter(key_func=get_remote_address)
@@ -164,6 +165,10 @@ def create_job(job: JobCreate, user_db: Tuple[Session, User] = Depends(get_user_
 
     db.commit()
     db.refresh(db_job)
+
+    # Track usage event for manual job creation
+    track_event(db, user.id, "job_created", {"source": db_job.source or "manual"})
+
     # Reload with resume relationship
     return db.query(Job).options(joinedload(Job.resume)).filter(Job.id == db_job.id).first()
 
@@ -231,6 +236,14 @@ def update_job_status(job_id: int, status_update: StatusUpdate, user_db: Tuple[S
     # Log status change activity
     if old_status != status_update.status:
         log_activity(db, job_id, user.id, "status_change", f"{old_status} -> {status_update.status}")
+
+        # Track triage events (when moving from "new" status)
+        if old_status == "new":
+            # Determine swipe direction based on new status
+            direction = "right" if status_update.status == "reviewing" else \
+                       "left" if status_update.status == "archived" else \
+                       "up" if status_update.status == "saved" else "other"
+            track_event(db, user.id, "job_triaged", {"direction": direction, "new_status": status_update.status})
 
     db.commit()
     # Reload with resume relationship

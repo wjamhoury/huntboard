@@ -12,6 +12,7 @@ from app.services.greenhouse_scraper import fetch_greenhouse_jobs
 from app.services.workday_scraper import fetch_workday_jobs
 from app.services.lever_scraper import fetch_lever_jobs
 from app.services.candidate_profile import should_exclude_title
+from app.services.usage_tracker import track_event
 
 router = APIRouter()
 
@@ -46,6 +47,10 @@ def create_company(company: CompanyFeedCreate, user_db: Tuple[Session, User] = D
     db.add(db_company)
     db.commit()
     db.refresh(db_company)
+
+    # Track usage event
+    track_event(db, user.id, "source_added", {"source_type": company.feed_type})
+
     return db_company
 
 

@@ -51,7 +51,9 @@
       "Bash(docker tag:*)",
       "Bash(chmod:*)",
       "Bash(make deploy-backend:*)",
-      "Bash(make deploy-all:*)"
+      "Bash(make deploy-all:*)",
+      "Bash(bash scripts/deploy-frontend.sh:*)",
+      "Bash(git add:*)"
     ]
   }
 }

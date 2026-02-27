@@ -133,6 +133,11 @@ export const companiesApi = {
 
 export const analyticsApi = {
   get: (days = null) => api.get('/analytics', { params: days ? { days } : {} }),
+  getDashboard: () => api.get('/analytics/dashboard'),
+}
+
+export const adminApi = {
+  getStats: () => api.get('/admin/stats'),
 }
 
 export const batchApi = {

@@ -1,6 +1,7 @@
 from fastapi import Depends
 from sqlalchemy.orm import Session
 from typing import Tuple
+from datetime import datetime, timezone
 
 from app.database import get_db
 from app.models.user import User
@@ -26,8 +27,12 @@ async def get_user_db(
             items = db.query(Item).filter(Item.user_id == user.id).all()
             return items
     """
+    from app.services.usage_tracker import track_event
+
     user = db.query(User).filter(User.id == user_claims["id"]).first()
+    is_new_user = False
     if not user:
+        is_new_user = True
         user = User(
             id=user_claims["id"],
             email=user_claims["email"],
@@ -36,4 +41,21 @@ async def get_user_db(
         db.add(user)
         db.commit()
         db.refresh(user)
+
+    # Track login event (only once per session, based on last_login)
+    # If last_login was more than 30 minutes ago, count this as a new login
+    now = datetime.now(timezone.utc)
+    should_track = is_new_user or not user.last_login
+    if not should_track and user.last_login:
+        # Make sure last_login is timezone-aware for comparison
+        last_login = user.last_login
+        if last_login.tzinfo is None:
+            last_login = last_login.replace(tzinfo=timezone.utc)
+        should_track = (now - last_login).total_seconds() > 1800
+
+    if should_track:
+        track_event(db, user.id, "user_login", {"new_user": is_new_user})
+        user.last_login = now
+        db.commit()
+
     return (db, user)

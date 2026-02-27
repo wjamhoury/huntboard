@@ -1,13 +1,15 @@
 import { Component } from 'react'
+import * as Sentry from '@sentry/react'
 
 /**
  * Error boundary component that catches React render errors
  * and displays a friendly error page instead of crashing.
+ * Integrates with Sentry for error monitoring when configured.
  */
 class ErrorBoundary extends Component {
   constructor(props) {
     super(props)
-    this.state = { hasError: false, error: null, errorInfo: null }
+    this.state = { hasError: false, error: null, errorInfo: null, eventId: null }
   }
 
   static getDerivedStateFromError(error) {
@@ -16,14 +18,19 @@ class ErrorBoundary extends Component {
   }
 
   componentDidCatch(error, errorInfo) {
-    // Log the error to console (and potentially to a monitoring service)
+    // Log the error to console
     console.error('ErrorBoundary caught an error:', error, errorInfo)
     this.setState({ errorInfo })
 
-    // TODO: Send to error monitoring service (e.g., Sentry)
-    // if (window.Sentry) {
-    //   window.Sentry.captureException(error, { extra: errorInfo })
-    // }
+    // Send to Sentry if configured
+    if (import.meta.env.VITE_SENTRY_DSN) {
+      const eventId = Sentry.captureException(error, {
+        extra: {
+          componentStack: errorInfo?.componentStack,
+        },
+      })
+      this.setState({ eventId })
+    }
   }
 
   handleReload = () => {
@@ -32,6 +39,16 @@ class ErrorBoundary extends Component {
 
   handleGoBack = () => {
     window.location.href = '/board'
+  }
+
+  handleReportIssue = () => {
+    // Open Sentry user feedback dialog if available
+    if (import.meta.env.VITE_SENTRY_DSN && this.state.eventId) {
+      Sentry.showReportDialog({ eventId: this.state.eventId })
+    } else {
+      // Fallback to GitHub issues
+      window.open('https://github.com/anthropics/claude-code/issues', '_blank')
+    }
   }
 
   render() {
@@ -75,6 +92,12 @@ class ErrorBoundary extends Component {
                 className="px-4 py-2 bg-gray-200 dark:bg-slate-700 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-300 dark:hover:bg-slate-600 transition-colors font-medium"
               >
                 Go to Board
+              </button>
+              <button
+                onClick={this.handleReportIssue}
+                className="px-4 py-2 bg-gray-200 dark:bg-slate-700 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-300 dark:hover:bg-slate-600 transition-colors font-medium"
+              >
+                Report Issue
               </button>
             </div>
 

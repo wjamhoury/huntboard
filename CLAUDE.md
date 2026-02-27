@@ -24,6 +24,9 @@ AI-powered job search tracker and career pipeline manager. Migrated from a singl
 ## Directory Map
 
 ```
+├── .github/workflows/
+│   ├── test.yml              # CI: runs tests on push/PR to main
+│   └── deploy.yml            # CD: deploys changed components on push to main
 ├── backend/
 │   ├── app/
 │   │   ├── main.py           # FastAPI app, CORS, routers, health check, SPA static serving
@@ -36,6 +39,12 @@ AI-powered job search tracker and career pipeline manager. Migrated from a singl
 │   │   ├── models/           # SQLAlchemy models (User, Job, Resume, Feed, Company, BatchRun)
 │   │   ├── schemas/          # Pydantic request/response schemas
 │   │   └── routers/          # API route handlers (jobs, resumes, feeds, ai, companies, analytics, batch)
+│   ├── tests/                # Backend test suite
+│   │   ├── conftest.py       # Test fixtures (db, users, clients)
+│   │   ├── test_health.py    # Health endpoint tests
+│   │   ├── test_auth.py      # Auth requirement tests
+│   │   ├── test_jobs.py      # Job CRUD tests
+│   │   └── test_tenant_isolation.py  # Multi-tenant isolation tests (CRITICAL)
 │   ├── alembic/              # Database migrations
 │   ├── uploads/              # Local resume storage fallback
 │   ├── Dockerfile
@@ -99,10 +108,11 @@ AI-powered job search tracker and career pipeline manager. Migrated from a singl
 | feeds       | /feeds          | CRUD, refresh, reset, toggle |
 | ai          | /ai             | cover-letter-prompt, resume-tailor-prompt, match-analysis |
 | companies   | /companies      | CRUD, refresh, reset, toggle |
-| analytics   | /analytics      | GET (with optional days param) |
+| analytics   | /analytics      | GET (legacy), GET /dashboard (comprehensive dashboard data) |
 | batch       | /batch          | trigger, status, score-jobs, runs, sources, sync, schedule |
 | sources     | /sources        | templates (public), suggestions (auth required) |
 | users       | /users          | GET /me, PATCH /me (profile + onboarding + preferences), DELETE /me (account deletion) |
+| admin       | /admin          | GET /stats (admin only - william.jamhoury@gmail.com) |
 | health      | /api/health     | DB connectivity check (not under /v1) |
 
 ## Key Environment Variables
@@ -121,6 +131,8 @@ AI-powered job search tracker and career pipeline manager. Migrated from a singl
 - `NIGHTLY_SYNC_HOUR` / `NIGHTLY_SYNC_ENABLED` — Scheduler config
 - `DRY_RUN_EMAIL` — "true" logs emails instead of sending via SES (default: true)
 - `JWT_SECRET` — Secret for signing email unsubscribe tokens
+- `SENTRY_DSN` — Sentry DSN for backend error monitoring (optional)
+- `ENVIRONMENT` — Environment name for Sentry (default: "production")
 
 ### Frontend (set in .env / .env.production, must be prefixed VITE_)
 - `VITE_API_URL` — Backend API base URL
@@ -128,6 +140,7 @@ AI-powered job search tracker and career pipeline manager. Migrated from a singl
 - `VITE_COGNITO_USER_POOL_ID` — Used by amplifyConfig (currently hardcoded instead)
 - `VITE_COGNITO_CLIENT_ID` — Used by amplifyConfig (currently hardcoded instead)
 - `VITE_COGNITO_DOMAIN` — For LinkedIn OAuth redirect
+- `VITE_SENTRY_DSN` — Sentry DSN for frontend error monitoring (optional)
 
 ## Commands
 
@@ -1075,4 +1088,414 @@ docker compose exec backend python -c "from app.services.digest_scheduler import
 
 # Check logs for dry run output
 docker compose logs -f backend | grep "DRY RUN"
+```
+
+## CI/CD with GitHub Actions
+
+Automated testing and deployment using GitHub Actions workflows.
+
+### Workflow Files
+
+```
+.github/workflows/
+├── test.yml     # Runs on all pushes and PRs to main
+└── deploy.yml   # Runs on push to main, deploys changed components
+```
+
+### Test Workflow (test.yml)
+
+Runs on all pushes and pull requests to `main`:
+
+**Backend Tests:**
+- Spins up PostgreSQL 16 service container
+- Installs Python 3.12 and dependencies
+- Runs pytest with test database
+
+**Frontend Build:**
+- Installs Node.js 20
+- Runs `npm ci && npm run build` to verify frontend builds
+
+### Deploy Workflow (deploy.yml)
+
+Runs on push to `main` (and can be triggered manually via `workflow_dispatch`):
+
+1. **detect-changes**: Uses `dorny/paths-filter` to determine if backend or frontend changed
+2. **deploy-backend**: Only if `backend/**` changed:
+   - Builds ARM64 Docker image
+   - Pushes to ECR with `latest` and commit SHA tags
+   - SSHs to EC2, pulls new image, runs migrations, health check
+3. **deploy-frontend**: Only if `frontend/**` changed:
+   - Builds with production env vars
+   - Syncs to S3 with cache headers
+   - Invalidates CloudFront cache
+
+### Running Tests Locally
+
+```bash
+# Via Docker (recommended)
+docker compose exec -e AUTH_DEV_MODE=true backend python -m pytest -v tests/
+
+# Or manually (requires local PostgreSQL)
+cd backend
+DATABASE_URL=postgresql://huntboard:huntboard_dev_password@localhost:5432/huntboard \
+AUTH_DEV_MODE=true \
+python -m pytest -v
+```
+
+### Test Structure
+
+```
+backend/tests/
+├── __init__.py              # Package marker
+├── conftest.py              # Fixtures: db session, test users, test clients
+├── test_health.py           # Health check endpoint tests
+├── test_auth.py             # Authentication requirement tests
+├── test_jobs.py             # Job CRUD and filtering tests
+└── test_tenant_isolation.py # CRITICAL: Multi-tenant data isolation tests
+```
+
+**Key Fixtures (conftest.py):**
+- `db`: Database session with transaction rollback after each test
+- `test_user_a`, `test_user_b`: Test user fixtures
+- `make_client(user)`: Factory to create test clients for different users
+- `client_user_a`, `client_user_b`: Pre-configured test clients
+- `sample_job_data`, `sample_job_a`: Sample job fixtures
+
+### GitHub Secrets Required
+
+Add these secrets in GitHub repo → Settings → Secrets and variables → Actions → New repository secret:
+
+| Secret | Value | Where to Find |
+|--------|-------|---------------|
+| `AWS_ACCESS_KEY_ID` | IAM access key | AWS IAM console |
+| `AWS_SECRET_ACCESS_KEY` | IAM secret key | AWS IAM console |
+| `EC2_HOST` | `44.206.144.96` | Terraform output / EC2 console |
+| `EC2_SSH_KEY` | Contents of `huntboard-ec2.pem` | `cat ~/.ssh/huntboard-ec2.pem` |
+| `ECR_REGISTRY` | `290046508532.dkr.ecr.us-east-1.amazonaws.com` | Terraform output |
+| `COGNITO_USER_POOL_ID` | `us-east-1_H05jUkMV7` | Terraform output |
+| `COGNITO_CLIENT_ID` | `5gmo5ojqegpnqqi28cnml0o2fb` | Terraform output |
+| `COGNITO_DOMAIN` | `huntboard.auth.us-east-1.amazoncognito.com` | Terraform output |
+| `FRONTEND_BUCKET` | `huntboard-frontend-1ad1715d` | Terraform output |
+| `CLOUDFRONT_DISTRIBUTION_ID` | `E3BXS7N5PX4WPF` | Terraform output |
+
+### Deployment Flow
+
+1. Developer pushes to `main` branch
+2. **test.yml** runs:
+   - Backend tests with PostgreSQL service
+   - Frontend build verification
+3. **deploy.yml** runs (if tests pass):
+   - Detects which components changed
+   - Deploys only changed components:
+     - Backend: Build → ECR → EC2 pull → Migrations → Health check
+     - Frontend: Build → S3 sync → CloudFront invalidation
+4. If deployment fails, GitHub Actions shows error in workflow run
+
+### Manual Deployment
+
+You can still deploy manually using Make commands:
+```bash
+make deploy-backend   # Deploy backend only
+make deploy-frontend  # Deploy frontend only
+make deploy-all       # Deploy both
+```
+
+Or trigger the deploy workflow manually from GitHub Actions UI using `workflow_dispatch`.
+
+## Analytics Dashboard
+
+Improved dashboard with comprehensive analytics and visualizations using recharts.
+
+### Dashboard Endpoint
+
+`GET /api/v1/analytics/dashboard` — Returns all dashboard data in a single call:
+
+```json
+{
+  "summary": {
+    "total_active": 145,        // Jobs not archived
+    "total_applied": 12,        // Jobs in applied/interviewing/offer/rejected
+    "avg_score": 67.3,          // Average AI match score
+    "added_this_week": 23,      // Jobs added in last 7 days
+    "active_sources": 8         // Enabled RSS + company feeds
+  },
+  "status_breakdown": [
+    {"status": "new", "count": 89},
+    {"status": "saved", "count": 15},
+    {"status": "reviewing", "count": 34},
+    ...
+  ],
+  "source_breakdown": [
+    {"source": "greenhouse", "count": 78},
+    {"source": "rss", "count": 45},
+    ...
+  ],
+  "score_distribution": [
+    {"range": "0-20", "count": 12},
+    {"range": "20-40", "count": 25},
+    {"range": "40-60", "count": 30},
+    {"range": "60-80", "count": 45},
+    {"range": "80-100", "count": 20},
+    {"range": "Unscored", "count": 13}
+  ],
+  "daily_activity": [
+    {"date": "2026-02-20", "added": 15, "applied": 2},
+    ...
+  ],
+  "recent_activities": [
+    {
+      "id": 123,
+      "job_id": 456,
+      "job_title": "SE at CrowdStrike",
+      "company": "CrowdStrike",
+      "action": "status_change",
+      "detail": "new -> reviewing",
+      "created_at": "2026-02-27T12:34:56Z"
+    },
+    ...
+  ]
+}
+```
+
+### Dashboard UI Components
+
+**Summary Cards** (top row):
+- Total active jobs (not archived)
+- Jobs applied to
+- Average AI match score
+- Jobs added this week
+- Active sources
+
+**Charts** (using recharts):
+- Application Funnel: Horizontal bar chart (New → Reviewing → Applied → Interviewing → Offer)
+- Jobs by Source: Donut chart showing breakdown by source
+- Score Distribution: Histogram showing jobs per score range (0-20, 20-40, etc.)
+- Activity Over Time: Line chart with jobs added and applications over last 30 days
+
+**Recent Activity**:
+- Last 10 job activities across all jobs
+- Clickable rows navigate to job detail page
+- Format: "Moved to Applied — 'SE at CrowdStrike' at CrowdStrike — 2h ago"
+
+### Frontend
+
+- `frontend/src/components/Dashboard.jsx` — Main dashboard component
+- Uses `analyticsApi.getDashboard()` from `api.js`
+- All charts use recharts (BarChart, PieChart, LineChart)
+
+## Usage Tracking
+
+Lightweight, privacy-respecting usage tracking to monitor app engagement.
+
+### UsageEvent Model
+
+`backend/app/models/usage_event.py`:
+
+```python
+class UsageEvent(Base):
+    __tablename__ = "usage_events"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(String(36), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    event = Column(String(100), nullable=False, index=True)
+    event_data = Column(JSON, nullable=True)  # Optional structured data
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), index=True)
+```
+
+### Tracked Events
+
+| Event | When | event_data |
+|-------|------|------------|
+| `user_login` | User authenticates (30min debounce) | `{"new_user": true/false}` |
+| `job_created` | Manual job creation | `{"source": "manual"}` |
+| `job_triaged` | Job swiped in triage | `{"direction": "right/left/up", "new_status": "..."}` |
+| `sync_completed` | Nightly or manual sync finishes | `{"jobs_added": N, "jobs_scored": N, "run_type": "..."}` |
+| `resume_uploaded` | Resume uploaded | `{"is_primary": true/false}` |
+| `source_added` | RSS or company feed added | `{"source_type": "rss/greenhouse/workday/lever"}` |
+| `onboarding_completed` | User finishes onboarding | `null` |
+
+### Usage Tracker Service
+
+`backend/app/services/usage_tracker.py`:
+
+```python
+def track_event(db: Session, user_id: str, event: str, event_data: Optional[dict] = None):
+    """
+    Track a usage event. Non-blocking, fails silently on error.
+    """
+    # INSERT into usage_events, rollback on error
+```
+
+### Admin Stats Endpoint
+
+`GET /api/v1/admin/stats` — Only accessible to admin users (hardcoded: william.jamhoury@gmail.com)
+
+```json
+{
+  "total_users": 150,
+  "active_users_7d": 45,
+  "active_users_30d": 89,
+  "total_jobs": 5000,
+  "total_syncs": 320,
+  "events_today": 125,
+  "events_7d": 890
+}
+```
+
+### Migration
+
+`8975609bd2ef_add_usage_events_table.py`:
+- Creates `usage_events` table with indexes on id, user_id, event, created_at
+
+### Querying Usage Data
+
+Direct database queries for analysis:
+
+```sql
+-- Active users last 7 days
+SELECT COUNT(DISTINCT user_id) FROM usage_events
+WHERE created_at > NOW() - INTERVAL '7 days';
+
+-- Events by type last 30 days
+SELECT event, COUNT(*) FROM usage_events
+WHERE created_at > NOW() - INTERVAL '30 days'
+GROUP BY event ORDER BY count DESC;
+
+-- Daily active users
+SELECT DATE(created_at), COUNT(DISTINCT user_id)
+FROM usage_events
+WHERE created_at > NOW() - INTERVAL '30 days'
+GROUP BY DATE(created_at) ORDER BY date;
+```
+
+## Error Monitoring & Observability
+
+Production error monitoring using Sentry (free tier: 5K errors/month) and comprehensive request logging.
+
+### Sentry Setup
+
+#### Backend
+
+Sentry is configured in `backend/app/main.py`:
+- Initializes automatically if `SENTRY_DSN` environment variable is set
+- Captures unhandled exceptions with full stack traces
+- 10% transaction sampling for performance monitoring
+- PII (personally identifiable information) is disabled by default
+
+**Environment Variable:**
+- `SENTRY_DSN` — Backend Sentry DSN (leave empty to disable)
+- `ENVIRONMENT` — Environment name for Sentry (default: "production")
+
+#### Frontend
+
+Sentry is configured in `frontend/src/main.jsx`:
+- Initializes automatically if `VITE_SENTRY_DSN` is set
+- Includes browser tracing and session replay integrations
+- Global `window.onerror` and `unhandledrejection` handlers
+- Filtered common noise (browser extensions, ResizeObserver errors)
+- Users can opt out by setting `localStorage.disable-error-tracking = 'true'`
+
+**Environment Variable:**
+- `VITE_SENTRY_DSN` — Frontend Sentry DSN (leave empty to disable)
+
+#### ErrorBoundary Integration
+
+The `ErrorBoundary` component (`frontend/src/components/ErrorBoundary.jsx`):
+- Automatically captures React render errors to Sentry
+- Shows "Report Issue" button that opens Sentry feedback dialog
+- Falls back to GitHub issues if Sentry is not configured
+
+### Setting Up Sentry (Manual Steps)
+
+1. Create a free Sentry account at https://sentry.io/
+2. Create a new project for the backend (Python/FastAPI)
+3. Create a new project for the frontend (React/JavaScript)
+4. Copy the DSN for each project
+5. Add to environment:
+   - Backend: Set `SENTRY_DSN` in production `.env` on EC2
+   - Frontend: Set `VITE_SENTRY_DSN` as GitHub secret and pass during build
+
+```bash
+# Add to production .env on EC2
+SENTRY_DSN=https://xxx@o123.ingest.sentry.io/456
+
+# Add to GitHub Secrets for frontend build
+VITE_SENTRY_DSN=https://yyy@o123.ingest.sentry.io/789
+```
+
+### Request Logging Middleware
+
+`backend/app/middleware/request_logger.py`:
+- Logs all requests with: method, path, status_code, duration_ms, client_ip, user_agent
+- Adds unique `request_id` (8-char UUID) to each request
+- Returns `X-Request-ID` header in all responses for debugging
+- Excludes `/api/health` from access logs (too noisy)
+
+**Log Format:**
+```
+INFO: GET /api/v1/jobs - 200 (45.23ms) {"request_id": "a1b2c3d4", "method": "GET", ...}
+```
+
+### Health Check Endpoint
+
+`GET /api/health` — Comprehensive health check with detailed status for each check:
+
+```json
+{
+  "status": "healthy",
+  "version": "1.0.0",
+  "checks": {
+    "database": "connected",
+    "s3": "connected",
+    "anthropic_key": "configured",
+    "cognito": "configured"
+  },
+  "uptime_seconds": 86400
+}
+```
+
+**Check Details:**
+- `database`: "connected" | "disconnected"
+- `s3`: "connected" | "not_configured" | "no_credentials" | "bucket_not_found" | "access_denied"
+- `anthropic_key`: "configured" | "not_configured"
+- `cognito`: "configured" | "dev_mode" | "not_configured"
+
+Returns HTTP 503 if database is down or cognito is not configured in production.
+
+### Uptime Monitoring (Recommended)
+
+Set up external uptime monitoring with a free service:
+
+1. Create account at [UptimeRobot](https://uptimerobot.com/) (free: 50 monitors, 5-min intervals)
+2. Add new HTTP(s) monitor:
+   - URL: `https://huntboard.app/api/health`
+   - Interval: 5 minutes
+   - Alert contacts: Your email
+3. Configure alerts for downtime
+
+Alternative services:
+- [Freshping](https://www.freshworks.com/website-monitoring/) (free: 50 monitors)
+- [StatusCake](https://www.statuscake.com/) (free: 10 monitors)
+- [Pingdom](https://www.pingdom.com/) (free trial)
+
+### GitHub Actions Secrets
+
+Add these secrets for Sentry in CI/CD:
+
+| Secret | Description |
+|--------|-------------|
+| `VITE_SENTRY_DSN` | Frontend Sentry DSN (passed during build) |
+
+Note: Backend `SENTRY_DSN` should be set directly in the EC2 production `.env` file, not in GitHub secrets.
+
+### Debugging with Request IDs
+
+1. When a user reports an error, ask for the `X-Request-ID` header value
+2. Search backend logs for that request ID to see the full context
+3. Correlate with Sentry events using the same request ID
+
+```bash
+# Search logs on EC2 for a specific request ID
+ssh -i ~/.ssh/huntboard-ec2.pem ec2-user@44.206.144.96 \
+  'docker compose logs backend 2>&1 | grep "a1b2c3d4"'
 ```

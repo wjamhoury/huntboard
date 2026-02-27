@@ -13,6 +13,7 @@ from app.models.user import User
 from app.schemas.rss_feed import RssFeedCreate, RssFeedResponse, RefreshResult
 from app.services.rss_parser import parse_feed, matches_keywords
 from app.services.candidate_profile import should_exclude_title
+from app.services.usage_tracker import track_event
 
 router = APIRouter()
 
@@ -58,6 +59,10 @@ def create_feed(feed: RssFeedCreate, user_db: Tuple[Session, User] = Depends(get
     db.add(db_feed)
     db.commit()
     db.refresh(db_feed)
+
+    # Track usage event
+    track_event(db, user.id, "source_added", {"source_type": "rss"})
+
     return db_feed
 
 

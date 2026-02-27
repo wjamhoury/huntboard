@@ -5,5 +5,6 @@ from app.models.resume import Resume
 from app.models.rss_feed import RssFeed
 from app.models.company_feed import CompanyFeed
 from app.models.batch_run import BatchRun
+from app.models.usage_event import UsageEvent
 
-__all__ = ["User", "Job", "JobActivity", "Resume", "RssFeed", "CompanyFeed", "BatchRun"]
+__all__ = ["User", "Job", "JobActivity", "Resume", "RssFeed", "CompanyFeed", "BatchRun", "UsageEvent"]

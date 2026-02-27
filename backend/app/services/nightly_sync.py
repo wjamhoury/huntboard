@@ -26,6 +26,7 @@ from app.services.workday_scraper import fetch_workday_jobs
 from app.services.lever_scraper import fetch_lever_jobs
 from app.services.claude_client import score_job_match
 from app.services.candidate_profile import should_exclude_title
+from app.services.usage_tracker import track_event
 
 
 # Keywords to filter RSS job listings (broader than title match since RSS has less structure)
@@ -144,6 +145,13 @@ def run_nightly_sync(run_type: str = "nightly_sync", user_id: Optional[str] = No
         batch_run.tokens_used = total_tokens
         batch_run.errors = json.dumps(errors)
         db.commit()
+
+        # Track sync completion event
+        track_event(db, user_id, "sync_completed", {
+            "jobs_added": jobs_imported,
+            "jobs_scored": jobs_scored,
+            "run_type": run_type
+        })
 
         logger.info(f"Sync completed. Imported: {jobs_imported}, Scored: {jobs_scored}, Filtered: {jobs_filtered_out}")
         return batch_run.id

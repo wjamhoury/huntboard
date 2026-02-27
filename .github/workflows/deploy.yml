@@ -1,0 +1,93 @@
+name: Deploy
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch: # Allow manual trigger from GitHub UI
+
+env:
+  AWS_REGION: us-east-1
+
+jobs:
+  detect-changes:
+    runs-on: ubuntu-latest
+    outputs:
+      backend: ${{ steps.changes.outputs.backend }}
+      frontend: ${{ steps.changes.outputs.frontend }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dorny/paths-filter@v3
+        id: changes
+        with:
+          filters: |
+            backend:
+              - 'backend/**'
+            frontend:
+              - 'frontend/**'
+
+  deploy-backend:
+    needs: [detect-changes]
+    if: needs.detect-changes.outputs.backend == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: us-east-1
+      - uses: aws-actions/amazon-ecr-login@v2
+        id: ecr
+      - name: Build and push to ECR
+        run: |
+          ECR_REPO=${{ steps.ecr.outputs.registry }}/huntboard-backend
+          docker build --platform linux/arm64 -t $ECR_REPO:latest -t $ECR_REPO:${{ github.sha }} backend/
+          docker push $ECR_REPO:latest
+          docker push $ECR_REPO:${{ github.sha }}
+      - name: Deploy to EC2
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ec2-user
+          key: ${{ secrets.EC2_SSH_KEY }}
+          script: |
+            aws ecr get-login-password --region us-east-1 | docker login --username AWS --password-stdin ${{ secrets.ECR_REGISTRY }}
+            cd /opt/huntboard
+            docker compose pull
+            docker compose up -d
+            sleep 5
+            docker exec huntboard-backend alembic upgrade head || true
+            curl -sf http://localhost/api/health && echo "Backend healthy" || echo "Backend unhealthy"
+            docker image prune -f
+
+  deploy-frontend:
+    needs: [detect-changes]
+    if: needs.detect-changes.outputs.frontend == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: us-east-1
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Build
+        working-directory: frontend
+        env:
+          VITE_API_URL: https://huntboard.app
+          VITE_COGNITO_USER_POOL_ID: ${{ secrets.COGNITO_USER_POOL_ID }}
+          VITE_COGNITO_CLIENT_ID: ${{ secrets.COGNITO_CLIENT_ID }}
+          VITE_COGNITO_DOMAIN: ${{ secrets.COGNITO_DOMAIN }}
+          VITE_AUTH_DEV_MODE: "false"
+          VITE_SENTRY_DSN: ${{ secrets.VITE_SENTRY_DSN }}
+        run: npm ci && npm run build
+      - name: Deploy to S3 + invalidate CloudFront
+        run: |
+          aws s3 sync frontend/dist/ s3://${{ secrets.FRONTEND_BUCKET }}/ --delete --cache-control "public, max-age=31536000, immutable"
+          aws s3 cp frontend/dist/index.html s3://${{ secrets.FRONTEND_BUCKET }}/index.html --cache-control "no-cache, no-store, must-revalidate"
+          aws cloudfront create-invalidation --distribution-id ${{ secrets.CLOUDFRONT_DISTRIBUTION_ID }} --paths "/*"

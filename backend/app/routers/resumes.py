@@ -13,6 +13,7 @@ from app.models.user import User
 from app.schemas.resume import ResumeResponse
 from app.services.pdf_extractor import extract_text_from_pdf
 from app.services import storage
+from app.services.usage_tracker import track_event
 
 logger = logging.getLogger(__name__)
 limiter = Limiter(key_func=get_remote_address)
@@ -129,6 +130,9 @@ async def upload_resume(
     db.add(db_resume)
     db.commit()
     db.refresh(db_resume)
+
+    # Track usage event
+    track_event(db, user.id, "resume_uploaded", {"is_primary": is_primary})
 
     return _resume_to_response(db_resume)
 

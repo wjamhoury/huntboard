@@ -15,6 +15,7 @@ from app.models.resume import Resume
 from app.schemas.user import UserResponse, UserUpdate
 from app.services import storage
 from app.services.email_service import verify_unsubscribe_token
+from app.services.usage_tracker import track_event
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -37,12 +38,20 @@ def update_current_user_profile(
     """Update the current user's profile."""
     db, user = user_db
 
+    # Track onboarding completion
+    old_onboarding_complete = user.onboarding_complete
+
     update_data = updates.model_dump(exclude_unset=True)
     for field, value in update_data.items():
         setattr(user, field, value)
 
     db.commit()
     db.refresh(user)
+
+    # Track onboarding completion event
+    if "onboarding_complete" in update_data and update_data["onboarding_complete"] and not old_onboarding_complete:
+        track_event(db, user.id, "onboarding_completed", None)
+
     return user
 
 
