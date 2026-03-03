@@ -14,11 +14,11 @@ import {
 
 function FeatureCard({ icon: Icon, title, description }) {
   return (
-    <div className="p-6 bg-slate-800/50 rounded-xl border border-slate-700/50 hover:border-slate-600 transition-colors">
-      <div className="w-12 h-12 bg-blue-600/20 rounded-lg flex items-center justify-center mb-4">
-        <Icon className="w-6 h-6 text-blue-400" />
+    <div className="p-4 sm:p-6 bg-slate-800/50 rounded-xl border border-slate-700/50 hover:border-slate-600 transition-colors">
+      <div className="w-10 h-10 sm:w-12 sm:h-12 bg-blue-600/20 rounded-lg flex items-center justify-center mb-3 sm:mb-4">
+        <Icon className="w-5 h-5 sm:w-6 sm:h-6 text-blue-400" />
       </div>
-      <h3 className="text-lg font-semibold text-white mb-2">{title}</h3>
+      <h3 className="text-base sm:text-lg font-semibold text-white mb-1.5 sm:mb-2">{title}</h3>
       <p className="text-slate-400 text-sm leading-relaxed">{description}</p>
     </div>
   )
@@ -26,18 +26,19 @@ function FeatureCard({ icon: Icon, title, description }) {
 
 function StepCard({ number, title, description }) {
   return (
-    <div className="flex flex-col items-center text-center">
-      <div className="w-12 h-12 bg-blue-600 rounded-full flex items-center justify-center text-white font-bold text-xl mb-4">
+    <div className="flex flex-col items-center text-center px-2">
+      <div className="w-10 h-10 sm:w-12 sm:h-12 bg-blue-600 rounded-full flex items-center justify-center text-white font-bold text-lg sm:text-xl mb-3 sm:mb-4">
         {number}
       </div>
-      <h3 className="text-lg font-semibold text-white mb-2">{title}</h3>
+      <h3 className="text-base sm:text-lg font-semibold text-white mb-1.5 sm:mb-2">{title}</h3>
       <p className="text-slate-400 text-sm">{description}</p>
     </div>
   )
 }
 
 function KanbanMockup() {
-  const columns = [
+  // Show fewer columns on mobile for better fit
+  const allColumns = [
     { name: 'New', color: 'bg-slate-500', jobs: ['Senior Engineer', 'Staff SWE'] },
     { name: 'Reviewing', color: 'bg-blue-500', jobs: ['ML Engineer'] },
     { name: 'Applied', color: 'bg-purple-500', jobs: ['Platform Lead', 'Infra Eng'] },
@@ -45,9 +46,37 @@ function KanbanMockup() {
   ]
 
   return (
-    <div className="bg-slate-800/80 rounded-xl p-4 border border-slate-700/50 shadow-2xl">
-      <div className="flex gap-3 overflow-x-auto pb-2">
-        {columns.map((col) => (
+    <div className="bg-slate-800/80 rounded-xl p-3 sm:p-4 border border-slate-700/50 shadow-2xl">
+      {/* Mobile: 2x2 grid, Desktop: horizontal scroll */}
+      <div className="grid grid-cols-2 gap-2 sm:hidden">
+        {allColumns.slice(0, 4).map((col) => (
+          <div key={col.name} className="min-w-0">
+            <div className="flex items-center gap-1.5 mb-2">
+              <div className={`w-2 h-2 rounded-full ${col.color}`} />
+              <span className="text-xs font-medium text-slate-300 truncate">{col.name}</span>
+              <span className="text-xs text-slate-500">{col.jobs.length}</span>
+            </div>
+            <div className="space-y-1.5">
+              {col.jobs.slice(0, 1).map((job) => (
+                <div
+                  key={job}
+                  className="bg-slate-700/50 rounded-lg p-2 border border-slate-600/50"
+                >
+                  <div className="text-xs font-medium text-white truncate">{job}</div>
+                  <div className="text-xs text-slate-400 mt-0.5 truncate">Tech Co</div>
+                  <div className="flex items-center justify-between mt-1">
+                    <span className="text-xs text-green-400">92%</span>
+                    <span className="text-xs text-slate-500">Remote</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        ))}
+      </div>
+      {/* Tablet and up: horizontal layout */}
+      <div className="hidden sm:flex gap-3 overflow-x-auto pb-2">
+        {allColumns.map((col) => (
           <div key={col.name} className="min-w-[140px] flex-shrink-0">
             <div className="flex items-center gap-2 mb-3">
               <div className={`w-2 h-2 rounded-full ${col.color}`} />
@@ -142,17 +171,17 @@ export default function LandingPage() {
       </section>
 
       {/* Features Section */}
-      <section className="py-20 px-4 sm:px-6 lg:px-8 bg-slate-800/30">
+      <section className="py-12 sm:py-20 px-4 sm:px-6 lg:px-8 bg-slate-800/30">
         <div className="max-w-6xl mx-auto">
-          <div className="text-center mb-12">
-            <h2 className="text-3xl font-bold text-white mb-4">
+          <div className="text-center mb-8 sm:mb-12">
+            <h2 className="text-2xl sm:text-3xl font-bold text-white mb-3 sm:mb-4">
               Everything you need to land your next role
             </h2>
-            <p className="text-slate-400 max-w-2xl mx-auto">
+            <p className="text-slate-400 max-w-2xl mx-auto text-sm sm:text-base px-2">
               Stop juggling spreadsheets and browser tabs. HuntBoard brings your entire job search into one streamlined workflow.
             </p>
           </div>
-          <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
             <FeatureCard
               icon={Rss}
               title="Auto-Import Jobs"
@@ -178,17 +207,17 @@ export default function LandingPage() {
       </section>
 
       {/* How It Works Section */}
-      <section className="py-20 px-4 sm:px-6 lg:px-8">
+      <section className="py-12 sm:py-20 px-4 sm:px-6 lg:px-8">
         <div className="max-w-4xl mx-auto">
-          <div className="text-center mb-12">
-            <h2 className="text-3xl font-bold text-white mb-4">
+          <div className="text-center mb-8 sm:mb-12">
+            <h2 className="text-2xl sm:text-3xl font-bold text-white mb-3 sm:mb-4">
               Get started in 3 simple steps
             </h2>
-            <p className="text-slate-400">
+            <p className="text-slate-400 text-sm sm:text-base">
               From signup to your first scored jobs in under 5 minutes.
             </p>
           </div>
-          <div className="grid md:grid-cols-3 gap-8">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 sm:gap-8">
             <StepCard
               number="1"
               title="Upload your resume"
@@ -209,16 +238,16 @@ export default function LandingPage() {
       </section>
 
       {/* Companies Section */}
-      <section className="py-16 px-4 sm:px-6 lg:px-8 bg-slate-800/30">
+      <section className="py-10 sm:py-16 px-4 sm:px-6 lg:px-8 bg-slate-800/30">
         <div className="max-w-6xl mx-auto text-center">
-          <p className="text-slate-500 text-sm uppercase tracking-wider mb-6">
+          <p className="text-slate-500 text-xs sm:text-sm uppercase tracking-wider mb-4 sm:mb-6">
             Import jobs from top companies
           </p>
-          <div className="flex flex-wrap justify-center items-center gap-x-10 gap-y-4">
+          <div className="grid grid-cols-2 sm:flex sm:flex-wrap justify-center items-center gap-x-6 sm:gap-x-10 gap-y-3 sm:gap-y-4">
             {['Anthropic', 'OpenAI', 'Stripe', 'Figma', 'Notion', 'Vercel', 'Linear', 'Supabase'].map((company) => (
-              <div key={company} className="flex items-center gap-2 text-slate-400">
-                <Building2 className="w-4 h-4" />
-                <span className="text-sm font-medium">{company}</span>
+              <div key={company} className="flex items-center justify-center sm:justify-start gap-1.5 sm:gap-2 text-slate-400">
+                <Building2 className="w-3.5 h-3.5 sm:w-4 sm:h-4 flex-shrink-0" />
+                <span className="text-xs sm:text-sm font-medium">{company}</span>
               </div>
             ))}
           </div>
@@ -226,19 +255,19 @@ export default function LandingPage() {
       </section>
 
       {/* CTA Section */}
-      <section className="py-20 px-4 sm:px-6 lg:px-8">
+      <section className="py-12 sm:py-20 px-4 sm:px-6 lg:px-8">
         <div className="max-w-3xl mx-auto text-center">
-          <div className="bg-gradient-to-r from-blue-600/20 to-purple-600/20 rounded-2xl p-8 sm:p-12 border border-slate-700/50">
-            <Target className="w-12 h-12 text-blue-500 mx-auto mb-6" />
-            <h2 className="text-3xl font-bold text-white mb-4">
+          <div className="bg-gradient-to-r from-blue-600/20 to-purple-600/20 rounded-xl sm:rounded-2xl p-6 sm:p-12 border border-slate-700/50">
+            <Target className="w-10 h-10 sm:w-12 sm:h-12 text-blue-500 mx-auto mb-4 sm:mb-6" />
+            <h2 className="text-2xl sm:text-3xl font-bold text-white mb-3 sm:mb-4">
               Ready to streamline your job search?
             </h2>
-            <p className="text-slate-400 mb-8">
+            <p className="text-slate-400 mb-6 sm:mb-8 text-sm sm:text-base">
               Join HuntBoard today and let AI help you find your next opportunity.
             </p>
             <Link
               to="/signup"
-              className="inline-flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-8 py-3 rounded-lg font-medium transition-colors"
+              className="inline-flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-6 sm:px-8 py-3 rounded-lg font-medium transition-colors text-sm sm:text-base"
             >
               <Upload className="w-4 h-4" />
               Get Started Free
@@ -248,19 +277,19 @@ export default function LandingPage() {
       </section>
 
       {/* Footer */}
-      <footer className="py-12 px-4 sm:px-6 lg:px-8 border-t border-slate-800">
+      <footer className="py-8 sm:py-12 px-4 sm:px-6 lg:px-8 border-t border-slate-800">
         <div className="max-w-6xl mx-auto">
-          <div className="flex flex-col md:flex-row items-center justify-between gap-6">
+          <div className="flex flex-col sm:flex-row items-center justify-between gap-4 sm:gap-6">
             <div className="flex items-center gap-2">
-              <Briefcase className="text-blue-500" size={24} />
-              <span className="text-lg font-semibold text-white">HuntBoard</span>
+              <Briefcase className="text-blue-500" size={22} />
+              <span className="text-base sm:text-lg font-semibold text-white">HuntBoard</span>
             </div>
-            <div className="flex items-center gap-6 text-sm text-slate-400">
+            <div className="flex items-center gap-4 sm:gap-6 text-sm text-slate-400">
               <Link to="/privacy" className="hover:text-white transition-colors">
-                Privacy Policy
+                Privacy
               </Link>
               <Link to="/terms" className="hover:text-white transition-colors">
-                Terms of Service
+                Terms
               </Link>
               <a
                 href="https://github.com/williamjamhoury"
@@ -272,8 +301,8 @@ export default function LandingPage() {
               </a>
             </div>
           </div>
-          <div className="mt-8 pt-8 border-t border-slate-800 text-center">
-            <p className="text-slate-500 text-sm">
+          <div className="mt-6 sm:mt-8 pt-6 sm:pt-8 border-t border-slate-800 text-center">
+            <p className="text-slate-500 text-xs sm:text-sm">
               Built by William Jamhoury
             </p>
           </div>
