@@ -6,6 +6,7 @@ import {
   Briefcase, Upload, FileText, Building2, Rss, Check, ChevronRight,
   ChevronLeft, Loader2, Sparkles, Rocket
 } from 'lucide-react'
+import { useAuth } from '../auth/AuthProvider'
 import { useResumes, useUploadResume } from '../hooks/useResumes'
 import { useSourceTemplates, useAddFromTemplate, useMyFeeds } from '../hooks/useSources'
 import { usersApi, batchApi } from '../services/api'
@@ -409,6 +410,7 @@ function StepIndicator({ currentStep, totalSteps }) {
 export default function OnboardingPage() {
   const navigate = useNavigate()
   const queryClient = useQueryClient()
+  const { refreshProfile } = useAuth()
   const [step, setStep] = useState(0)
   const [isCompleting, setIsCompleting] = useState(false)
   const { data: sources = [] } = useMyFeeds()
@@ -429,7 +431,11 @@ export default function OnboardingPage() {
         }
       }
 
-      // Invalidate user profile cache
+      // Refresh user profile in AuthProvider context - this is critical
+      // to prevent ProtectedRoute from redirecting back to onboarding
+      await refreshProfile()
+
+      // Also invalidate React Query cache for consistency
       queryClient.invalidateQueries({ queryKey: ['userProfile'] })
 
       // Redirect to board
