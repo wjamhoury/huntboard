@@ -148,7 +148,8 @@ export function AuthProvider({ children }) {
 
     try {
       const session = await fetchAuthSession()
-      return session.tokens?.accessToken?.toString()
+      // Use ID token instead of access token - ID token contains user attributes (email, name)
+      return session.tokens?.idToken?.toString()
     } catch {
       return null
     }

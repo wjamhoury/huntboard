@@ -63,9 +63,27 @@ async def get_current_user(
             audience=get_cognito_app_client_id(),
             issuer=f"https://cognito-idp.{region}.amazonaws.com/{user_pool_id}"
         )
+
+        # Validate token_use - we expect ID token which contains user attributes
+        token_use = payload.get("token_use")
+        if token_use not in ("id", "access"):
+            logger.warning(f"Invalid token_use: {token_use}")
+            raise HTTPException(status_code=401, detail="Invalid token type")
+
+        # Extract email - ID tokens have email in the payload, access tokens don't
+        email = payload.get("email", "")
+
+        # If no email in token (access token was sent), log warning
+        if not email:
+            logger.warning(f"Token missing email claim. token_use={token_use}, sub={payload.get('sub')}")
+            # Try to get email from cognito:username if it looks like an email
+            cognito_username = payload.get("cognito:username", "")
+            if "@" in cognito_username:
+                email = cognito_username
+
         return {
             "id": payload["sub"],
-            "email": payload.get("email", ""),
+            "email": email,
             "name": payload.get("name", payload.get("cognito:username", "")),
         }
     except JWTError as e:

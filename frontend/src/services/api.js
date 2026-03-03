@@ -21,7 +21,9 @@ api.interceptors.request.use(
     } else {
       try {
         const session = await fetchAuthSession()
-        const token = session.tokens?.accessToken?.toString()
+        // Use ID token instead of access token - ID token contains user attributes (email, name)
+        // Access token only contains scopes and doesn't include email claim
+        const token = session.tokens?.idToken?.toString()
         if (token) {
           config.headers.Authorization = `Bearer ${token}`
         }
@@ -50,9 +52,9 @@ api.interceptors.response.use(
       try {
         const { fetchAuthSession } = await import('aws-amplify/auth')
         const session = await fetchAuthSession({ forceRefresh: true })
-        if (session.tokens?.accessToken) {
-          // Retry the original request with new token
-          error.config.headers.Authorization = `Bearer ${session.tokens.accessToken.toString()}`
+        if (session.tokens?.idToken) {
+          // Retry the original request with new token (use ID token for user attributes)
+          error.config.headers.Authorization = `Bearer ${session.tokens.idToken.toString()}`
           return api.request(error.config)
         }
       } catch {

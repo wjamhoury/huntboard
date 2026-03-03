@@ -1,4 +1,4 @@
-from fastapi import Depends
+from fastapi import Depends, HTTPException
 from sqlalchemy.orm import Session
 from typing import Tuple
 from datetime import datetime, timezone
@@ -32,10 +32,18 @@ async def get_user_db(
     user = db.query(User).filter(User.id == user_claims["id"]).first()
     is_new_user = False
     if not user:
+        # Validate email before creating user - empty email indicates wrong token type
+        email = user_claims.get("email", "")
+        if not email:
+            raise HTTPException(
+                status_code=401,
+                detail="Email not found in authentication token. Please log out and log in again."
+            )
+
         is_new_user = True
         user = User(
             id=user_claims["id"],
-            email=user_claims["email"],
+            email=email,
             full_name=user_claims.get("name", ""),
         )
         db.add(user)
