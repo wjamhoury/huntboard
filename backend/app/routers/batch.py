@@ -588,3 +588,61 @@ def backfill_locations(user_db: Tuple[Session, User] = Depends(get_user_db)):
         "jobs_updated": updated,
         "total_checked": len(jobs)
     }
+
+
+@router.post("/backfill-resumes")
+def backfill_resumes(user_db: Tuple[Session, User] = Depends(get_user_db)):
+    """
+    Assign the primary resume to all jobs that don't have a resume_id set.
+    This is a one-time operation to backfill existing jobs.
+
+    For jobs that already have a match_score (were AI-scored), they should already
+    have the best resume assigned. This endpoint only fills in jobs that somehow
+    missed getting a resume_id during scoring or were never scored.
+    """
+    db, user = user_db
+
+    # Get user's primary resume
+    primary_resume = db.query(Resume).filter(
+        Resume.user_id == user.id,
+        Resume.is_primary == True
+    ).first()
+
+    if not primary_resume:
+        # If no primary resume, try to get any resume
+        any_resume = db.query(Resume).filter(
+            Resume.user_id == user.id
+        ).first()
+        if not any_resume:
+            return {
+                "message": "No resumes found - please upload a resume first",
+                "jobs_updated": 0,
+                "total_without_resume": 0
+            }
+        primary_resume = any_resume
+
+    # Find all jobs without a resume_id for this user
+    jobs_without_resume = db.query(Job).filter(
+        Job.user_id == user.id,
+        Job.resume_id == None
+    ).all()
+
+    total_without = len(jobs_without_resume)
+    updated = 0
+
+    for job in jobs_without_resume:
+        job.resume_id = primary_resume.id
+        updated += 1
+
+    db.commit()
+
+    return {
+        "message": f"Assigned resume '{primary_resume.original_filename}' to {updated} jobs",
+        "jobs_updated": updated,
+        "total_without_resume": total_without,
+        "resume_used": {
+            "id": primary_resume.id,
+            "filename": primary_resume.original_filename,
+            "is_primary": primary_resume.is_primary
+        }
+    }

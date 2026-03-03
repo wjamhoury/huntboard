@@ -188,6 +188,7 @@ Set `AUTH_DEV_MODE=true` (backend) and `VITE_AUTH_DEV_MODE=true` (frontend) to b
 | `GET /api/v1/companies` | List company feeds |
 | `GET /api/v1/sources/templates` | Browse source catalog (no auth) |
 | `POST /api/v1/batch/sync` | Trigger manual sync |
+| `POST /api/v1/batch/backfill-resumes` | Assign primary resume to all jobs without one |
 | `GET /api/v1/analytics/dashboard` | Dashboard data |
 | `GET /api/v1/users/me` | Current user profile |
 | `DELETE /api/v1/users/me` | Delete account |

@@ -10,6 +10,7 @@ from slowapi.util import get_remote_address
 from app.dependencies import get_user_db
 from app.models.job import Job
 from app.models.job_activity import JobActivity
+from app.models.resume import Resume
 from app.models.user import User
 from app.schemas.job import JobCreate, JobUpdate, JobResponse, StatusUpdate, JobActivityResponse
 from app.services.job_scraper import scrape_job_url
@@ -161,6 +162,15 @@ def create_job(job: JobCreate, user_db: Tuple[Session, User] = Depends(get_user_
     # Parse location and update normalized location fields
     if db_job.location:
         update_job_location(db_job)
+
+    # Auto-assign primary resume if no resume_id was provided
+    if db_job.resume_id is None:
+        primary_resume = db.query(Resume).filter(
+            Resume.user_id == user.id,
+            Resume.is_primary == True
+        ).first()
+        if primary_resume:
+            db_job.resume_id = primary_resume.id
 
     db.add(db_job)
     db.flush()  # Get the ID without committing
