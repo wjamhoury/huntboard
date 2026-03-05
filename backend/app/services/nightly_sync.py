@@ -364,7 +364,7 @@ def _import_google_jobs(db: Session, user_id: str) -> tuple[int, list[str]]:
     return jobs_added, errors
 
 
-def _score_unscored_jobs(db: Session, user_id: str, limit: int = 200) -> tuple[int, int, int, list[str]]:
+def _score_unscored_jobs(db: Session, user_id: str) -> tuple[int, int, int, list[str]]:
     """
     Score jobs using hybrid matching (deterministic + AI).
     Archives low-scoring auto-imported jobs (never user-created jobs).
@@ -375,19 +375,32 @@ def _score_unscored_jobs(db: Session, user_id: str, limit: int = 200) -> tuple[i
     - NEVER archive jobs with status "applied", "interviewing", or "offer"
     - Only archive auto-imported jobs that are "new" or "reviewing" AND score below MIN_MATCH_SCORE
 
+    Scoring modes:
+    - With resumes: Full hybrid scoring (60% deterministic + 40% AI)
+    - With target_job_titles only: Simplified title matching (no AI call)
+    - With neither: Cannot score, returns error
+
     Returns: (jobs_scored, jobs_filtered_out, tokens_used, errors)
     """
+    from app.models.user import User
+
     # Statuses that should never be auto-archived (user is actively tracking)
     PROTECTED_STATUSES = {"applied", "interviewing", "offer"}
 
+    # Get user for target_job_titles
+    user = db.query(User).filter(User.id == user_id).first()
+    target_job_titles = user.target_job_titles if user else None
+
     resumes = db.query(Resume).filter(Resume.user_id == user_id).all()
-    if not resumes:
-        return 0, 0, 0, ["No resumes uploaded - cannot score jobs"]
+
+    # If no resumes AND no target job titles, can't score
+    if not resumes and not target_job_titles:
+        return 0, 0, 0, ["No resumes or target job titles - cannot score jobs. Please upload a resume or set target roles."]
 
     resume_data = [
         {"id": r.id, "name": r.original_filename, "text": r.extracted_text or ""}
         for r in resumes
-    ]
+    ] if resumes else []
 
     unscored_jobs = db.query(Job).filter(
         Job.user_id == user_id,
@@ -395,7 +408,7 @@ def _score_unscored_jobs(db: Session, user_id: str, limit: int = 200) -> tuple[i
         Job.status == "new",
         Job.description != "",
         Job.description != None
-    ).limit(limit).all()
+    ).all()
 
     jobs_scored = 0
     jobs_filtered = 0
@@ -411,6 +424,7 @@ def _score_unscored_jobs(db: Session, user_id: str, limit: int = 200) -> tuple[i
                 resumes=resume_data,
                 location=job.location or "",
                 remote_type=job.remote_type or "unknown",
+                target_job_titles=target_job_titles,
             )
 
             if result:
@@ -453,3 +467,88 @@ def _score_unscored_jobs(db: Session, user_id: str, limit: int = 200) -> tuple[i
             errors.append("AI scoring is temporarily unavailable. Some jobs will be scored on the next sync.")
 
     return jobs_scored, jobs_filtered, total_tokens, errors
+
+
+def run_nightly_sync_for_all_users() -> dict:
+    """
+    Main entry point for the nightly scheduler.
+    Runs sync for ALL active users who have sources configured.
+
+    Called daily at the configured hour (default 3 AM UTC) by APScheduler.
+
+    Returns:
+        dict with stats: {users_processed, total_jobs_imported, total_jobs_scored, errors}
+    """
+    from app.models.user import User
+
+    logger.info("Starting nightly sync for all users")
+    db = SessionLocal()
+
+    stats = {
+        "users_processed": 0,
+        "total_jobs_imported": 0,
+        "total_jobs_scored": 0,
+        "errors": [],
+    }
+
+    try:
+        # Query all active users who have completed onboarding
+        users = (
+            db.query(User)
+            .filter(
+                User.is_active == True,
+                User.onboarding_complete == True
+            )
+            .all()
+        )
+
+        logger.info(f"Found {len(users)} active users to sync")
+
+        for user in users:
+            try:
+                # Check if user has any sources configured
+                feed_count = db.query(RssFeed).filter(
+                    RssFeed.user_id == user.id,
+                    RssFeed.is_active == True
+                ).count()
+                company_count = db.query(CompanyFeed).filter(
+                    CompanyFeed.user_id == user.id,
+                    CompanyFeed.is_active == True
+                ).count()
+
+                if feed_count == 0 and company_count == 0:
+                    logger.debug(f"Skipping user {user.id} - no active sources")
+                    continue
+
+                stats["users_processed"] += 1
+                logger.info(f"Syncing user {user.id} ({feed_count} RSS feeds, {company_count} company feeds)")
+
+                # Run sync for this user (creates its own session)
+                batch_run_id = run_nightly_sync("nightly_sync", user.id)
+
+                if batch_run_id:
+                    # Fetch the completed batch run to get stats
+                    batch_run = db.query(BatchRun).filter(BatchRun.id == batch_run_id).first()
+                    if batch_run:
+                        stats["total_jobs_imported"] += batch_run.jobs_imported or 0
+                        stats["total_jobs_scored"] += batch_run.jobs_scored or 0
+
+            except Exception as e:
+                logger.error(f"Error syncing user {user.id}: {e}")
+                stats["errors"].append(f"User {user.id}: {str(e)}")
+
+        logger.info(
+            f"Nightly sync completed: {stats['users_processed']} users processed, "
+            f"{stats['total_jobs_imported']} jobs imported, "
+            f"{stats['total_jobs_scored']} jobs scored, "
+            f"{len(stats['errors'])} errors"
+        )
+
+    except Exception as e:
+        logger.error(f"Nightly sync job failed: {e}")
+        stats["errors"].append(f"Fatal error: {str(e)}")
+
+    finally:
+        db.close()
+
+    return stats

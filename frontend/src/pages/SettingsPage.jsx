@@ -19,6 +19,9 @@ import {
   Info,
   RotateCcw,
   Key,
+  Target,
+  X,
+  Plus,
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { useAuth } from '../auth/AuthProvider'
@@ -31,6 +34,7 @@ import {
   useExportJobsCsv,
   useDeleteAllJobs,
   useDeleteAccount,
+  useUpdateTargetRoles,
 } from '../hooks/useSettings'
 import ConfirmModal from '../components/ui/ConfirmModal'
 
@@ -93,6 +97,7 @@ export default function SettingsPage() {
   const exportCsv = useExportJobsCsv()
   const deleteAllJobs = useDeleteAllJobs()
   const deleteAccount = useDeleteAccount()
+  const updateTargetRoles = useUpdateTargetRoles()
 
   // Local state
   const [displayName, setDisplayName] = useState('')
@@ -109,6 +114,8 @@ export default function SettingsPage() {
     email_digest_min_score: 60,
     email_digest_day: 'monday',
   })
+  const [targetRoles, setTargetRoles] = useState([])
+  const [roleInput, setRoleInput] = useState('')
 
   // Modal state
   const [showDeleteJobsModal, setShowDeleteJobsModal] = useState(false)
@@ -119,6 +126,7 @@ export default function SettingsPage() {
   useEffect(() => {
     if (userProfile) {
       setDisplayName(userProfile.full_name || '')
+      setTargetRoles(userProfile.target_job_titles || [])
       if (userProfile.preferences) {
         setPreferences(prev => ({
           ...prev,
@@ -338,6 +346,90 @@ export default function SettingsPage() {
             <ExternalLink size={16} />
             Manage Sources
           </Link>
+        </div>
+
+        {/* Target Roles */}
+        <div className="bg-white dark:bg-slate-800 rounded-lg shadow-sm border border-slate-200 dark:border-slate-700 p-6">
+          <div className="flex items-center gap-3 mb-4">
+            <Target size={20} className="text-indigo-600" />
+            <h2 className="text-lg font-semibold text-slate-900 dark:text-white">Target Roles</h2>
+          </div>
+
+          <p className="text-slate-600 dark:text-slate-400 text-sm mb-4">
+            Add the job titles you're targeting. These help HuntBoard score job matches better,
+            especially if you haven't uploaded a resume.
+          </p>
+
+          {/* Current roles */}
+          {targetRoles.length > 0 && (
+            <div className="flex flex-wrap gap-2 mb-4">
+              {targetRoles.map((role, index) => (
+                <span
+                  key={index}
+                  className="inline-flex items-center gap-1 px-3 py-1.5 bg-indigo-100 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300 rounded-full text-sm"
+                >
+                  {role}
+                  <button
+                    onClick={() => setTargetRoles(targetRoles.filter((_, i) => i !== index))}
+                    className="p-0.5 hover:bg-indigo-200 dark:hover:bg-indigo-800 rounded-full"
+                  >
+                    <X size={14} />
+                  </button>
+                </span>
+              ))}
+            </div>
+          )}
+
+          {/* Add new role */}
+          <div className="flex gap-2 mb-4">
+            <input
+              type="text"
+              value={roleInput}
+              onChange={(e) => setRoleInput(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && roleInput.trim() && targetRoles.length < 10) {
+                  e.preventDefault()
+                  if (!targetRoles.includes(roleInput.trim())) {
+                    setTargetRoles([...targetRoles, roleInput.trim()])
+                  }
+                  setRoleInput('')
+                }
+              }}
+              placeholder="e.g., Software Engineer"
+              className="flex-1 px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-slate-900 dark:text-white"
+            />
+            <button
+              onClick={() => {
+                if (roleInput.trim() && targetRoles.length < 10 && !targetRoles.includes(roleInput.trim())) {
+                  setTargetRoles([...targetRoles, roleInput.trim()])
+                  setRoleInput('')
+                }
+              }}
+              disabled={!roleInput.trim() || targetRoles.length >= 10}
+              className="px-3 py-2 bg-indigo-600 hover:bg-indigo-700 disabled:bg-slate-300 dark:disabled:bg-slate-600 text-white rounded-lg transition-colors"
+            >
+              <Plus size={20} />
+            </button>
+          </div>
+
+          {targetRoles.length >= 10 && (
+            <p className="text-xs text-amber-600 dark:text-amber-400 mb-4">
+              Maximum of 10 target roles allowed
+            </p>
+          )}
+
+          <button
+            onClick={() => updateTargetRoles.mutateAsync(targetRoles)}
+            disabled={updateTargetRoles.isPending}
+            className="flex items-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 disabled:bg-indigo-400 text-white rounded-lg"
+          >
+            {updateTargetRoles.isPending ? (
+              <Loader2 size={16} className="animate-spin" />
+            ) : (
+              <Save size={16} />
+            )}
+            Save Target Roles
+          </button>
         </div>
 
         {/* Preferences */}

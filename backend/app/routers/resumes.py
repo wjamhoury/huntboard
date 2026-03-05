@@ -1,6 +1,6 @@
 import logging
 
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Request
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Request, BackgroundTasks
 from fastapi.responses import RedirectResponse, FileResponse
 from sqlalchemy.orm import Session
 from typing import List, Tuple
@@ -8,8 +8,10 @@ from slowapi import Limiter
 from slowapi.util import get_remote_address
 
 from app.dependencies import get_user_db
+from app.database import SessionLocal
 from app.models.resume import Resume
 from app.models.user import User
+from app.models.job import Job
 from app.schemas.resume import ResumeResponse
 from app.services.pdf_extractor import extract_text_from_pdf
 from app.services import storage
@@ -18,6 +20,102 @@ from app.services.usage_tracker import track_event
 logger = logging.getLogger(__name__)
 limiter = Limiter(key_func=get_remote_address)
 router = APIRouter()
+
+
+def _score_unscored_jobs_after_resume_upload(user_id: str, resume_id: int):
+    """
+    Background task: Score unscored jobs after a new resume is uploaded.
+    This ensures that jobs imported before the resume get scored.
+    """
+    import json
+    from datetime import datetime
+    from app.services.claude_client import score_job_match
+    from app.services.nightly_sync import MIN_MATCH_SCORE
+
+    db = SessionLocal()
+    try:
+        # Get user for target_job_titles
+        user = db.query(User).filter(User.id == user_id).first()
+        target_job_titles = user.target_job_titles if user else None
+
+        # Get all resumes for this user
+        resumes = db.query(Resume).filter(Resume.user_id == user_id).all()
+        resume_data = [
+            {"id": r.id, "name": r.original_filename, "text": r.extracted_text or ""}
+            for r in resumes
+        ]
+
+        if not resume_data:
+            logger.warning(f"No resumes found for user {user_id} after upload")
+            return
+
+        # Get unscored jobs for this user
+        unscored_jobs = db.query(Job).filter(
+            Job.user_id == user_id,
+            Job.match_score == None,
+            Job.status == "new",
+            Job.description != "",
+            Job.description != None
+        ).all()
+
+        if not unscored_jobs:
+            logger.info(f"No unscored jobs to process for user {user_id} after resume upload")
+            return
+
+        logger.info(f"Scoring {len(unscored_jobs)} jobs for user {user_id} after resume upload")
+        scored = 0
+
+        for job in unscored_jobs:
+            try:
+                result = score_job_match(
+                    job_title=job.title,
+                    job_company=job.company,
+                    job_description=job.description or "",
+                    resumes=resume_data,
+                    location=job.location or "",
+                    remote_type=job.remote_type or "unknown",
+                    target_job_titles=target_job_titles,
+                )
+
+                if result:
+                    job.match_score = result["score"]
+                    job.resume_id = result.get("resume_id")
+                    job.why_good_fit = json.dumps(result.get("why_good_fit", []))
+                    job.missing_gaps = json.dumps(result.get("missing_gaps", []))
+                    job.score_detail = json.dumps(result.get("detail", {}))
+                    job.general_notes = f"AI Analysis: {result.get('reason', '')}"
+                    job.scored_at = datetime.now()
+                    scored += 1
+
+                    # Set priority based on score
+                    if result["score"] >= 90:
+                        job.priority = 1
+                    elif result["score"] >= 80:
+                        job.priority = 2
+                    elif result["score"] >= MIN_MATCH_SCORE:
+                        job.priority = 3
+
+                    # Auto-archive low-scoring auto-imported jobs
+                    PROTECTED_STATUSES = {"applied", "interviewing", "offer"}
+                    should_archive = (
+                        result["score"] < MIN_MATCH_SCORE
+                        and job.source not in ("manual", "import_url")
+                        and job.status not in PROTECTED_STATUSES
+                        and job.status in ("new", "reviewing")
+                    )
+                    if should_archive:
+                        job.status = "archived"
+
+            except Exception as e:
+                logger.error(f"Error scoring job {job.id} after resume upload: {e}")
+
+        db.commit()
+        logger.info(f"Scored {scored} jobs for user {user_id} after resume upload")
+
+    except Exception as e:
+        logger.error(f"Error in post-resume-upload scoring for user {user_id}: {e}")
+    finally:
+        db.close()
 
 MAX_FILE_SIZE = 10 * 1024 * 1024  # 10MB
 MAX_RESUMES_PER_USER = 10
@@ -68,6 +166,7 @@ def get_resume(resume_id: int, user_db: Tuple[Session, User] = Depends(get_user_
 @limiter.limit("5/minute")
 async def upload_resume(
     request: Request,
+    background_tasks: BackgroundTasks,
     file: UploadFile = File(...),
     user_db: Tuple[Session, User] = Depends(get_user_db)
 ):
@@ -133,6 +232,9 @@ async def upload_resume(
 
     # Track usage event
     track_event(db, user.id, "resume_uploaded", {"is_primary": is_primary})
+
+    # Trigger background scoring of unscored jobs
+    background_tasks.add_task(_score_unscored_jobs_after_resume_upload, user.id, db_resume.id)
 
     return _resume_to_response(db_resume)
 

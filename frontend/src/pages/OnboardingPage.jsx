@@ -4,12 +4,26 @@ import { useQueryClient } from '@tanstack/react-query'
 import toast from 'react-hot-toast'
 import {
   Briefcase, Upload, FileText, Building2, Rss, Check, ChevronRight,
-  ChevronLeft, Loader2, Sparkles, Rocket
+  ChevronLeft, Loader2, Sparkles, Rocket, Target, X, Plus
 } from 'lucide-react'
 import { useAuth } from '../auth/AuthProvider'
 import { useResumes, useUploadResume } from '../hooks/useResumes'
 import { useSourceTemplates, useAddFromTemplate, useMyFeeds } from '../hooks/useSources'
 import { usersApi, batchApi } from '../services/api'
+
+// Common role suggestions for the target job titles step
+const ROLE_SUGGESTIONS = [
+  'Software Engineer',
+  'Product Manager',
+  'Data Scientist',
+  'Solutions Engineer',
+  'UX Designer',
+  'DevOps Engineer',
+  'Marketing Manager',
+  'Sales Engineer',
+  'Business Analyst',
+  'Technical Account Manager',
+]
 
 const PLATFORM_CONFIG = {
   rss: { icon: Rss, color: 'text-orange-500', bg: 'bg-orange-50 dark:bg-orange-900/20', badge: 'bg-orange-100 text-orange-700 dark:bg-orange-900 dark:text-orange-300', label: 'RSS' },
@@ -151,7 +165,161 @@ function ResumeStep({ onNext, onSkip }) {
   )
 }
 
-// Step 3: Add Sources
+// Step 3: Target Job Titles (shown when user skipped resume upload)
+function TargetRolesStep({ onNext, onBack, skippedResume }) {
+  const [titles, setTitles] = useState([])
+  const [inputValue, setInputValue] = useState('')
+  const [isSaving, setIsSaving] = useState(false)
+
+  const addTitle = (title) => {
+    const trimmed = title.trim()
+    if (trimmed && !titles.includes(trimmed) && titles.length < 10) {
+      setTitles([...titles, trimmed])
+      setInputValue('')
+    }
+  }
+
+  const removeTitle = (index) => {
+    setTitles(titles.filter((_, i) => i !== index))
+  }
+
+  const handleKeyDown = (e) => {
+    if (e.key === 'Enter' && inputValue.trim()) {
+      e.preventDefault()
+      addTitle(inputValue)
+    }
+  }
+
+  const handleNext = async () => {
+    // If skipped resume and no titles, require at least one
+    if (skippedResume && titles.length === 0) {
+      toast.error('Please add at least one target role')
+      return
+    }
+
+    setIsSaving(true)
+    try {
+      // Save target job titles to the user profile
+      if (titles.length > 0) {
+        await usersApi.updateMe({ target_job_titles: titles })
+      }
+      onNext()
+    } catch (err) {
+      toast.error('Failed to save target roles')
+    } finally {
+      setIsSaving(false)
+    }
+  }
+
+  return (
+    <div className="text-center">
+      <div className="w-14 md:w-16 h-14 md:h-16 bg-indigo-100 dark:bg-indigo-900/30 rounded-full flex items-center justify-center mx-auto mb-4 md:mb-6">
+        <Target size={28} className="md:w-8 md:h-8 text-indigo-600" />
+      </div>
+      <h2 className="text-xl md:text-2xl font-bold text-slate-900 dark:text-white mb-3 md:mb-4">
+        What Roles Are You Targeting?
+      </h2>
+      <p className="text-sm md:text-base text-slate-600 dark:text-slate-400 mb-6 max-w-md mx-auto">
+        {skippedResume
+          ? "Tell us what roles you're looking for so we can score job matches for you."
+          : "Optionally add target roles to help us find better matches."}
+      </p>
+
+      <div className="max-w-md mx-auto">
+        {/* Tag display */}
+        {titles.length > 0 && (
+          <div className="flex flex-wrap gap-2 mb-4 justify-center">
+            {titles.map((title, index) => (
+              <span
+                key={index}
+                className="inline-flex items-center gap-1 px-3 py-1.5 bg-indigo-100 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300 rounded-full text-sm"
+              >
+                {title}
+                <button
+                  onClick={() => removeTitle(index)}
+                  className="p-0.5 hover:bg-indigo-200 dark:hover:bg-indigo-800 rounded-full"
+                >
+                  <X size={14} />
+                </button>
+              </span>
+            ))}
+          </div>
+        )}
+
+        {/* Input */}
+        <div className="flex gap-2 mb-4">
+          <input
+            type="text"
+            value={inputValue}
+            onChange={(e) => setInputValue(e.target.value)}
+            onKeyDown={handleKeyDown}
+            placeholder="e.g., Software Engineer"
+            className="flex-1 px-4 py-3 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-slate-900 dark:text-white focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+          />
+          <button
+            onClick={() => addTitle(inputValue)}
+            disabled={!inputValue.trim() || titles.length >= 10}
+            className="px-4 py-3 bg-indigo-600 hover:bg-indigo-700 disabled:bg-slate-300 dark:disabled:bg-slate-600 text-white rounded-lg transition-colors"
+          >
+            <Plus size={20} />
+          </button>
+        </div>
+
+        {/* Suggestions */}
+        <div className="text-left mb-6">
+          <p className="text-xs text-slate-500 dark:text-slate-400 mb-2">Quick add:</p>
+          <div className="flex flex-wrap gap-2">
+            {ROLE_SUGGESTIONS.filter(s => !titles.includes(s)).slice(0, 6).map((suggestion) => (
+              <button
+                key={suggestion}
+                onClick={() => addTitle(suggestion)}
+                disabled={titles.length >= 10}
+                className="px-2 py-1 text-xs bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 text-slate-600 dark:text-slate-300 rounded-md transition-colors disabled:opacity-50"
+              >
+                + {suggestion}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {titles.length >= 10 && (
+          <p className="text-xs text-amber-600 dark:text-amber-400 mb-4">
+            Maximum of 10 target roles allowed
+          </p>
+        )}
+      </div>
+
+      <div className="flex flex-col md:flex-row items-center justify-center gap-3 md:gap-4 mt-6 md:mt-8">
+        <button
+          onClick={onBack}
+          className="inline-flex items-center gap-2 text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200 order-2 md:order-1 py-2"
+        >
+          <ChevronLeft size={20} />
+          Back
+        </button>
+        <button
+          onClick={handleNext}
+          disabled={isSaving}
+          className="inline-flex items-center justify-center gap-2 px-6 py-3.5 md:py-3 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg transition-colors order-1 md:order-2 w-full md:w-auto disabled:opacity-50"
+        >
+          {isSaving ? (
+            <>
+              <Loader2 size={20} className="animate-spin" />
+              Saving...
+            </>
+          ) : (
+            <>
+              {skippedResume && titles.length === 0 ? 'Add at least one role' : 'Next'}
+              <ChevronRight size={20} />
+            </>
+          )}
+        </button>
+      </div>
+    </div>
+  )
+}
+
+// Step 4: Add Sources
 function SourcesStep({ onNext, onBack }) {
   const { data: templatesData, isLoading: templatesLoading } = useSourceTemplates()
   const { data: existingSources = [] } = useMyFeeds()
@@ -413,7 +581,17 @@ export default function OnboardingPage() {
   const { refreshProfile } = useAuth()
   const [step, setStep] = useState(0)
   const [isCompleting, setIsCompleting] = useState(false)
+  const [skippedResume, setSkippedResume] = useState(false)
+  const { data: resumes = [] } = useResumes()
   const { data: sources = [] } = useMyFeeds()
+
+  // Check if user has a resume (either uploaded or skipped)
+  const hasResume = resumes.length > 0
+
+  // Dynamic steps based on whether user skipped resume
+  // If skipped: Welcome -> Resume -> Target Roles -> Sources -> Complete (5 steps)
+  // If uploaded: Welcome -> Resume -> Sources -> Complete (4 steps)
+  const totalSteps = skippedResume ? 5 : 4
 
   const handleComplete = async () => {
     setIsCompleting(true)
@@ -446,24 +624,83 @@ export default function OnboardingPage() {
     }
   }
 
-  const nextStep = () => setStep(s => Math.min(s + 1, 3))
+  const handleResumeNext = () => {
+    // User uploaded a resume and clicked Next
+    setSkippedResume(false)
+    setStep(s => s + 1)
+  }
+
+  const handleResumeSkip = () => {
+    // User skipped resume upload - we'll ask for target roles
+    setSkippedResume(true)
+    setStep(s => s + 1)
+  }
+
+  const nextStep = () => setStep(s => Math.min(s + 1, totalSteps - 1))
   const prevStep = () => setStep(s => Math.max(s - 1, 0))
 
-  return (
-    <div className="min-h-screen bg-slate-50 dark:bg-slate-900 flex items-center justify-center p-4">
-      <div className="w-full max-w-2xl bg-white dark:bg-slate-800 rounded-2xl shadow-xl border border-slate-200 dark:border-slate-700 p-5 md:p-8">
-        <StepIndicator currentStep={step} totalSteps={4} />
+  // Determine which component to show based on step and whether resume was skipped
+  const renderStep = () => {
+    if (step === 0) {
+      return <WelcomeStep onNext={nextStep} />
+    }
 
-        {step === 0 && <WelcomeStep onNext={nextStep} />}
-        {step === 1 && <ResumeStep onNext={nextStep} onSkip={nextStep} />}
-        {step === 2 && <SourcesStep onNext={nextStep} onBack={prevStep} />}
-        {step === 3 && (
+    if (step === 1) {
+      return (
+        <ResumeStep
+          onNext={handleResumeNext}
+          onSkip={handleResumeSkip}
+        />
+      )
+    }
+
+    if (skippedResume) {
+      // 5-step flow: 0=Welcome, 1=Resume, 2=Target Roles, 3=Sources, 4=Complete
+      if (step === 2) {
+        return (
+          <TargetRolesStep
+            onNext={nextStep}
+            onBack={prevStep}
+            skippedResume={true}
+          />
+        )
+      }
+      if (step === 3) {
+        return <SourcesStep onNext={nextStep} onBack={prevStep} />
+      }
+      if (step === 4) {
+        return (
           <CompleteStep
             sourceCount={sources.length}
             onComplete={handleComplete}
             isCompleting={isCompleting}
           />
-        )}
+        )
+      }
+    } else {
+      // 4-step flow: 0=Welcome, 1=Resume, 2=Sources, 3=Complete
+      if (step === 2) {
+        return <SourcesStep onNext={nextStep} onBack={prevStep} />
+      }
+      if (step === 3) {
+        return (
+          <CompleteStep
+            sourceCount={sources.length}
+            onComplete={handleComplete}
+            isCompleting={isCompleting}
+          />
+        )
+      }
+    }
+
+    return null
+  }
+
+  return (
+    <div className="min-h-screen bg-slate-50 dark:bg-slate-900 flex items-center justify-center p-4">
+      <div className="w-full max-w-2xl bg-white dark:bg-slate-800 rounded-2xl shadow-xl border border-slate-200 dark:border-slate-700 p-5 md:p-8">
+        <StepIndicator currentStep={step} totalSteps={totalSteps} />
+        {renderStep()}
       </div>
     </div>
   )

@@ -408,16 +408,22 @@ def _run_scoring(user_id: str, job_ids: Optional[List[int]] = None):
     db = SessionLocal()
 
     try:
+        # Get user for target_job_titles
+        user = db.query(User).filter(User.id == user_id).first()
+        target_job_titles = user.target_job_titles if user else None
+
         # Get resumes for this user
         resumes = db.query(Resume).filter(Resume.user_id == user_id).all()
-        if not resumes:
-            logger.warning(f"No resumes found for user {user_id} - cannot score jobs")
+
+        # If no resumes AND no target job titles, can't score
+        if not resumes and not target_job_titles:
+            logger.warning(f"No resumes or target job titles for user {user_id} - cannot score jobs")
             return
 
         resume_data = [
             {"id": r.id, "name": r.original_filename, "text": r.extracted_text or ""}
             for r in resumes
-        ]
+        ] if resumes else []
 
         # Get jobs to score for this user
         if job_ids:
@@ -445,6 +451,7 @@ def _run_scoring(user_id: str, job_ids: Optional[List[int]] = None):
                     resumes=resume_data,
                     location=job.location or "",
                     remote_type=job.remote_type or "unknown",
+                    target_job_titles=target_job_titles,
                 )
 
                 if result:

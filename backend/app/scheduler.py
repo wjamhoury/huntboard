@@ -55,7 +55,7 @@ def _ensure_job_exists():
     This handles the case where the in-memory job store lost the job
     (e.g. after a uvicorn reload or unexpected restart).
     """
-    from app.services.nightly_sync import run_nightly_sync
+    from app.services.nightly_sync import run_nightly_sync_for_all_users
 
     job = scheduler.get_job("nightly_sync")
     if job is not None:
@@ -67,7 +67,7 @@ def _ensure_job_exists():
 
     logger.info(f"Re-registering missing nightly_sync job (hour={sync_hour}, enabled={sync_enabled})")
     scheduler.add_job(
-        run_nightly_sync,
+        run_nightly_sync_for_all_users,
         CronTrigger(hour=sync_hour, minute=0),
         id="nightly_sync",
         name="Nightly job import and scoring",
@@ -83,7 +83,7 @@ def _ensure_job_exists():
 
 def setup_scheduler():
     """Configure and start the nightly sync scheduler and email digest scheduler."""
-    from app.services.nightly_sync import run_nightly_sync
+    from app.services.nightly_sync import run_nightly_sync_for_all_users
     from app.services.digest_scheduler import run_digest_for_all_users
 
     config = _load_config()
@@ -91,8 +91,9 @@ def setup_scheduler():
     sync_enabled = config["enabled"]
 
     # Always add the job so get_job("nightly_sync") works for the API
+    # Now uses run_nightly_sync_for_all_users which iterates over all active users
     scheduler.add_job(
-        run_nightly_sync,
+        run_nightly_sync_for_all_users,
         CronTrigger(hour=sync_hour, minute=0),
         id="nightly_sync",
         name="Nightly job import and scoring",

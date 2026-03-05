@@ -118,3 +118,22 @@ export function useDeleteAccount() {
     onError: (error) => handleApiError(error, 'deleting account'),
   })
 }
+
+/**
+ * Update target job titles for AI scoring
+ */
+export function useUpdateTargetRoles() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: async (targetJobTitles) => {
+      const response = await usersApi.updateMe({ target_job_titles: targetJobTitles })
+      return response.data
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['userProfile'] })
+      toast.success('Target roles saved')
+    },
+    onError: (error) => handleApiError(error, 'updating target roles'),
+  })
+}

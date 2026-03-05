@@ -1,11 +1,16 @@
 """
 Claude API client for AI-powered job scoring.
 Combines deterministic scoring (candidate_profile) with AI semantic analysis.
+
+Scoring modes:
+1. With resumes: Full hybrid scoring (60% deterministic + 40% AI using resume text)
+2. With target_job_titles only: Simplified title matching (no AI call to save costs)
+3. With both: Hybrid scoring with title boost
 """
 import logging
 import os
 import json
-from typing import Optional
+from typing import Optional, List
 from anthropic import Anthropic
 
 from app.services.candidate_profile import compute_match_score
@@ -25,6 +30,108 @@ def get_client() -> Optional[Anthropic]:
     return Anthropic(api_key=api_key)
 
 
+def score_job_with_titles_only(
+    job_title: str,
+    job_company: str,
+    job_description: str,
+    target_titles: List[str],
+    location: str = "",
+    remote_type: str = "unknown",
+) -> Optional[dict]:
+    """
+    Score a job using only target job titles (no resume).
+    Uses a simplified matching approach focused on title similarity.
+
+    This is used when users haven't uploaded a resume but have specified
+    what roles they're targeting.
+
+    Returns dict with:
+    - score: 0-100 match score
+    - why_good_fit: list of reasons it's a good match
+    - missing_gaps: list of potential gaps
+    - reason: brief explanation
+    - resume_id: None (no resume)
+    - tokens_used: 0 (no AI call)
+    """
+    if not target_titles:
+        return None
+
+    job_title_lower = job_title.lower()
+    target_titles_lower = [t.lower() for t in target_titles]
+
+    # Title matching score (0-40)
+    title_score = 0
+    matched_title = None
+    for target in target_titles_lower:
+        # Exact match
+        if target in job_title_lower or job_title_lower in target:
+            title_score = 40
+            matched_title = target
+            break
+        # Partial word match (e.g., "engineer" in both)
+        target_words = set(target.split())
+        job_words = set(job_title_lower.split())
+        overlap = target_words & job_words
+        word_score = len(overlap) * 10
+        if word_score > title_score:
+            title_score = word_score
+            matched_title = target
+
+    # Deterministic scoring for the rest (skills, domain, seniority, location)
+    deterministic = compute_match_score(
+        job_title=job_title,
+        job_description=job_description,
+        location=location,
+        remote_type=remote_type,
+    )
+
+    # Combine: 40% title match, 60% deterministic (rescaled)
+    det_contribution = int(deterministic["score"] * 0.6)
+    final_score = title_score + det_contribution
+    final_score = max(0, min(100, final_score))
+
+    # Build explanations
+    why_good_fit = []
+    missing_gaps = []
+
+    if title_score >= 30:
+        why_good_fit.append(f"Job title closely matches your target: '{matched_title}'")
+    elif title_score >= 15:
+        why_good_fit.append(f"Job title has some overlap with your targets")
+    else:
+        missing_gaps.append("Job title doesn't closely match your target roles")
+
+    # Add relevant deterministic explanations
+    why_good_fit.extend(deterministic.get("why_good_fit", [])[:2])
+    missing_gaps.extend(deterministic.get("missing_gaps", [])[:2])
+
+    reason = f"Score based on title match with your targets: {', '.join(target_titles[:3])}"
+    if final_score >= 75:
+        reason = f"Strong match - title aligns with your target roles"
+    elif final_score >= 50:
+        reason = f"Moderate match - some alignment with target roles"
+    else:
+        reason = f"Weak match - title differs from your target roles"
+
+    return {
+        "score": final_score,
+        "why_good_fit": why_good_fit[:4],
+        "missing_gaps": missing_gaps[:4],
+        "reason": reason,
+        "resume_id": None,
+        "tokens_used": 0,
+        "detail": {
+            "title_match_score": title_score,
+            "deterministic_contribution": det_contribution,
+            "skill_score": deterministic.get("skill_score", 0),
+            "domain_score": deterministic.get("domain_score", 0),
+            "seniority_score": deterministic.get("seniority_score", 0),
+            "location_score": deterministic.get("location_score", 0),
+            "ai_score": None,
+        },
+    }
+
+
 def score_job_match(
     job_title: str,
     job_company: str,
@@ -32,11 +139,15 @@ def score_job_match(
     resumes: list[dict],
     location: str = "",
     remote_type: str = "unknown",
+    target_job_titles: Optional[List[str]] = None,
 ) -> Optional[dict]:
     """
     Score how well a job matches the candidate using a hybrid approach:
     1. Deterministic scoring from candidate_profile (title, skills, domain, seniority, location)
     2. AI semantic analysis for nuance and explanation
+
+    If no resumes but target_job_titles provided, uses simplified title matching.
+    If both resumes and target_job_titles provided, adds a title match boost.
 
     Returns dict with:
     - score: 0-100 match score
@@ -46,7 +157,17 @@ def score_job_match(
     - resume_id: ID of best matching resume
     - tokens_used: total tokens consumed
     """
+    # If no resumes, fall back to title-only scoring
     if not resumes:
+        if target_job_titles:
+            return score_job_with_titles_only(
+                job_title=job_title,
+                job_company=job_company,
+                job_description=job_description,
+                target_titles=target_job_titles,
+                location=location,
+                remote_type=remote_type,
+            )
         return None
 
     # Step 1: Deterministic scoring
@@ -67,7 +188,7 @@ def score_job_match(
     tokens_used = 0
 
     if client:
-        ai_result = _ai_score(client, job_title, job_company, job_description, resumes)
+        ai_result = _ai_score(client, job_title, job_company, job_description, resumes, target_job_titles)
         if ai_result:
             ai_score = ai_result["score"]
             ai_reason = ai_result["reason"]
@@ -119,40 +240,45 @@ def _ai_score(
     job_company: str,
     job_description: str,
     resumes: list[dict],
+    target_job_titles: Optional[List[str]] = None,
 ) -> Optional[dict]:
     """Run AI-based semantic scoring using Claude."""
     desc_truncated = job_description[:2000] if job_description else "No description available"
 
+    # Build resume context from actual resume content
     resume_summaries = []
     for r in resumes:
-        text_preview = r["text"][:1000] if r["text"] else "No text extracted"
+        text_preview = r["text"][:1500] if r["text"] else "No text extracted"
         resume_summaries.append(f"Resume #{r['id']} ({r['name']}):\n{text_preview}")
 
     resumes_text = "\n\n".join(resume_summaries)
 
-    prompt = f"""You are evaluating job fit for a Solutions Engineer / Pre-Sales professional with 10+ years experience in cybersecurity, enterprise SaaS, cloud security, identity management, and technical enablement.
+    # Build target roles context if provided
+    target_roles_context = ""
+    if target_job_titles:
+        target_roles_context = f"\nThe candidate is specifically targeting these roles: {', '.join(target_job_titles[:5])}\n"
 
-The candidate's strengths:
-- Technical discovery, product demos, POCs for enterprise accounts
-- Partner enablement, training, certification programs
-- Cybersecurity domain (SIEM, endpoint security, zero trust, cloud security)
-- Cloud platforms (AWS, Azure), IAM (Okta, SAML, SSO)
-- Executive briefings and technical storytelling
+    prompt = f"""You are evaluating job fit for a candidate based on their resume(s).
 
+CANDIDATE RESUMES:
+{resumes_text}
+{target_roles_context}
 JOB TITLE: {job_title}
 COMPANY: {job_company}
 JOB DESCRIPTION:
 {desc_truncated}
 
-CANDIDATE RESUMES:
-{resumes_text}
-
-Score this job 1-10 for fit AND provide specific reasons.
+Based on the candidate's experience shown in their resume(s), score this job 1-10 for fit.
+Consider:
+- How well the job title matches roles the candidate is qualified for
+- Overlap between required skills and the candidate's demonstrated experience
+- Whether the seniority level is appropriate
+- Domain/industry alignment
 
 Respond with ONLY a JSON object:
 {{
   "score": <1-10>,
-  "reason": "<1-2 sentence summary>",
+  "reason": "<1-2 sentence summary of the fit>",
   "why_good_fit": ["<specific reason 1>", "<specific reason 2>"],
   "missing_gaps": ["<gap 1>", "<gap 2>"],
   "best_resume_id": <id of best matching resume>

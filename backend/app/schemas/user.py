@@ -1,5 +1,5 @@
 from pydantic import BaseModel, Field, field_validator
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, List
 from datetime import datetime
 import re
 
@@ -8,6 +8,8 @@ import re
 MAX_NAME_LENGTH = 200
 MAX_EMAIL_LENGTH = 320
 MAX_URL_LENGTH = 2000
+MAX_JOB_TITLE_LENGTH = 100
+MAX_TARGET_TITLES = 10
 
 
 class UserPreferences(BaseModel):
@@ -70,6 +72,7 @@ class UserResponse(BaseModel):
     avatar_url: Optional[str] = None
     onboarding_complete: bool
     preferences: Optional[Dict[str, Any]] = None
+    target_job_titles: Optional[List[str]] = None
     created_at: datetime
     last_digest_sent: Optional[datetime] = None
 
@@ -82,3 +85,22 @@ class UserUpdate(BaseModel):
     avatar_url: Optional[str] = Field(default=None, max_length=MAX_URL_LENGTH)
     onboarding_complete: Optional[bool] = None
     preferences: Optional[Dict[str, Any]] = None
+    target_job_titles: Optional[List[str]] = None
+
+    @field_validator("target_job_titles")
+    @classmethod
+    def validate_target_job_titles(cls, v: Optional[List[str]]) -> Optional[List[str]]:
+        """Validate target job titles list."""
+        if v is None:
+            return v
+        if len(v) > MAX_TARGET_TITLES:
+            raise ValueError(f"Maximum {MAX_TARGET_TITLES} target job titles allowed")
+        validated = []
+        for title in v:
+            if not title or not title.strip():
+                continue
+            title = title.strip()
+            if len(title) > MAX_JOB_TITLE_LENGTH:
+                raise ValueError(f"Job title must be at most {MAX_JOB_TITLE_LENGTH} characters")
+            validated.append(title)
+        return validated

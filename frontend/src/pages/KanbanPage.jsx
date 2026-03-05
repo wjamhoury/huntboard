@@ -6,11 +6,12 @@ import {
 import toast from 'react-hot-toast'
 import { useJobs, useCreateJob, useUpdateJob, useDeleteJob, useBulkDeleteJobs, useBulkUpdateJobStatus } from '../hooks/useJobs'
 import { useResumes } from '../hooks/useResumes'
-import { useSelectiveSync, useScoreJobs, useBatchStatus } from '../hooks/useSync'
+import { useSelectiveSync, useScoreJobs, useBatchStatus, useBatchRuns } from '../hooks/useSync'
 import { useJobFilters } from '../hooks/useJobFilters'
 import { KanbanColumn, JobDetailPanel, AddJobModal, ImportUrlModal, COLUMNS, CLOSED_STATUSES, STATUS_OPTIONS, isFollowUpDue } from '../components/kanban'
 import { SkeletonKanbanColumn } from '../components/ui/Skeleton'
 import FilterBar from '../components/FilterBar'
+import SyncStatusIndicator from '../components/SyncStatusIndicator'
 
 export default function KanbanPage() {
   const [selectedJob, setSelectedJob] = useState(null)
@@ -38,6 +39,10 @@ export default function KanbanPage() {
   const { data: jobs = [], isLoading, refetch: refetchJobs } = useJobs(apiParams)
   const { data: resumes = [] } = useResumes()
   const { data: batchStatus } = useBatchStatus()
+  const { data: batchRuns = [] } = useBatchRuns(0, 5)
+
+  // Check if this is user's first sync (no previous completed runs)
+  const isFirstSync = batchRuns.length === 0 || (batchRuns.length === 1 && batchStatus?.is_running)
 
   const createJob = useCreateJob()
   const updateJob = useUpdateJob()
@@ -286,6 +291,9 @@ export default function KanbanPage() {
 
   return (
     <div className="p-4 pb-20 md:pb-4">
+      {/* Sync Status Indicator */}
+      <SyncStatusIndicator isFirstSync={isFirstSync} />
+
       {/* Header Bar */}
       <div className="mb-4 flex flex-wrap items-center gap-2">
         {/* Stats */}

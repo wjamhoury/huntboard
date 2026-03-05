@@ -15,6 +15,9 @@ class User(Base):
     is_active = Column(Boolean, default=True)
     onboarding_complete = Column(Boolean, default=False, nullable=False)
     preferences = Column(JSON, nullable=True, default=dict)  # User preferences (sort order, auto-archive, etc.)
+    # Target job titles for AI scoring when no resume is uploaded
+    # Example: ["Solutions Engineer", "Sales Engineer", "Technical Account Manager"]
+    target_job_titles = Column(JSON, nullable=True, default=list)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     last_login = Column(DateTime(timezone=True), nullable=True)
     last_digest_sent = Column(DateTime(timezone=True), nullable=True)

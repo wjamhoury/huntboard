@@ -132,8 +132,8 @@ PostgreSQL 16 (Docker locally, on EC2 in production).
 
 | Model | Purpose |
 |-------|---------|
-| `User` | User profile, preferences, onboarding status |
-| `Job` | Job listings with status, AI score, notes, parsed location |
+| `User` | User profile, preferences, onboarding status, target_job_titles |
+| `Job` | Job listings with status, AI score, resume_id, notes, parsed location |
 | `Resume` | PDF storage references, extracted text |
 | `RssFeed` | User's RSS feed subscriptions |
 | `CompanyFeed` | Greenhouse/Workday/Lever feeds |
@@ -198,13 +198,116 @@ Set `AUTH_DEV_MODE=true` (backend) and `VITE_AUTH_DEV_MODE=true` (frontend) to b
 | Feature | Files |
 |---------|-------|
 | Swipe Triage | `frontend/src/pages/TriagePage.jsx`, `hooks/useTriageJobs.js` |
-| AI Scoring | `backend/app/services/anthropic_client.py`, `routers/ai.py` |
+| AI Scoring | `backend/app/services/claude_client.py`, `nightly_sync.py`, `routers/batch.py` |
 | Source Templates | `backend/app/services/source_templates.py`, `routers/sources.py` |
 | Onboarding | `frontend/src/pages/OnboardingPage.jsx`, `User.onboarding_complete` |
 | Filters | `frontend/src/components/FilterBar.jsx`, `hooks/useJobFilters.js` |
 | Email Digests | `backend/app/services/email_service.py`, `digest_scheduler.py` |
 | CSV Export | `backend/app/routers/jobs.py` (`/export/csv`) |
 | Mobile UI | `frontend/src/components/mobile/MobileBottomNav.jsx`, `MobileFilterSheet.jsx` |
+
+## AI Scoring Pipeline
+
+The AI scoring system is the core value proposition of HuntBoard. It automatically scores job matches against user's resumes or target job titles.
+
+### Scoring Architecture
+
+```
+Job Import → Queue for Scoring → Hybrid Score (60% deterministic + 40% AI) → Auto-archive low scores
+```
+
+**Files involved:**
+- `backend/app/services/claude_client.py` — Hybrid scoring logic (deterministic + Claude API)
+- `backend/app/services/candidate_profile.py` — Deterministic scoring rules (title/skill/domain/seniority/location)
+- `backend/app/services/nightly_sync.py` — Orchestrates import + scoring
+- `backend/app/routers/batch.py` — Manual scoring endpoints
+
+### Scoring Modes
+
+1. **With Resumes** — Full hybrid scoring:
+   - 60% deterministic (title alignment, skill match, domain, seniority, location)
+   - 40% AI semantic analysis (Claude Haiku reads resume text and job description)
+   - Returns best-matching `resume_id`
+
+2. **With Target Job Titles Only** (no resume) — Simplified matching:
+   - Title matching against user's `target_job_titles` (0-40 points)
+   - 60% deterministic component for skills/domain/seniority/location
+   - No AI API call (saves costs)
+   - `resume_id` is null
+
+3. **With Both** — Hybrid scoring with title boost:
+   - Uses resumes for full AI analysis
+   - Boosts score if job title matches a target title
+
+### Scoring Trigger Points
+
+Jobs are scored automatically at these points:
+
+| Trigger | Location | Behavior |
+|---------|----------|----------|
+| Nightly sync (3 AM UTC) | `scheduler.py` → `nightly_sync.run_nightly_sync_for_all_users()` | Scores all unscored jobs for user |
+| Manual sync | `POST /api/v1/batch/trigger` | Scores all unscored jobs for the user |
+| Selective sync | `POST /api/v1/batch/sync` | Scores if `score_after: true` |
+| Manual score | `POST /api/v1/batch/score-jobs` | Scores specific job IDs or all unscored |
+| Resume upload | `POST /api/v1/resumes` | Scores all unscored jobs in background |
+
+### Auto-Archive Logic
+
+Low-scoring jobs are auto-archived during sync with these protections:
+
+```python
+should_archive = (
+    score < 75  # MIN_MATCH_SCORE
+    and source not in ("manual", "import_url")  # Never archive user-created
+    and status not in ("applied", "interviewing", "offer")  # Never archive active
+    and status in ("new", "reviewing")  # Only auto-imported jobs
+)
+```
+
+### Target Job Titles
+
+Users can specify target roles in addition to (or instead of) uploading a resume.
+
+**User model:**
+```python
+target_job_titles = Column(JSON, nullable=True, default=list)
+# Example: ["Solutions Engineer", "Sales Engineer", "Technical Account Manager"]
+```
+
+**Where to set:**
+- During onboarding (required if resume skipped)
+- In Settings → Target Roles section
+
+### Score Fields on Job Model
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `match_score` | Integer | 0-100 overall score |
+| `resume_id` | FK to Resume | Which resume best matched (null if title-only) |
+| `why_good_fit` | JSON | Array of reasons it's a good match |
+| `missing_gaps` | JSON | Array of potential gaps |
+| `score_detail` | JSON | Breakdown (title_score, skill_score, domain_score, seniority_score, location_score, ai_score) |
+| `general_notes` | String | AI's summary explanation |
+| `scored_at` | DateTime | When last scored |
+
+### Debugging Scoring Issues
+
+```bash
+# Check unscored jobs for a user
+docker compose exec backend python -c "
+from app.database import SessionLocal
+from app.models.job import Job
+from app.models.user import User
+db = SessionLocal()
+user = db.query(User).filter(User.email == 'william.jamhoury@gmail.com').first()
+unscored = db.query(Job).filter(Job.user_id == user.id, Job.match_score == None).count()
+print(f'Unscored jobs: {unscored}')
+"
+
+# Manually trigger scoring for a user
+curl -X POST https://huntboard.app/api/v1/batch/trigger \
+  -H "Authorization: Bearer <token>"
+```
 
 ## Deployment
 
