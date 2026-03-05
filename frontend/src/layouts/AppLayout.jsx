@@ -31,7 +31,7 @@ export default function AppLayout() {
   const [darkMode, setDarkMode] = useState(() => {
     return document.documentElement.classList.contains('dark')
   })
-  const { user, logout } = useAuth()
+  const { user, userProfile, logout } = useAuth()
   const navigate = useNavigate()
   const newJobsCount = useNewJobsCount()
 
@@ -99,7 +99,7 @@ export default function AppLayout() {
               </div>
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-medium text-slate-900 dark:text-white truncate">
-                  {user?.name || user?.email || 'User'}
+                  {userProfile?.full_name || user?.email?.split('@')[0] || 'User'}
                 </p>
                 <p className="text-xs text-slate-500 dark:text-slate-400 truncate">
                   {user?.email}

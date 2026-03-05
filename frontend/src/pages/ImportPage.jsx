@@ -1,10 +1,10 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import toast from 'react-hot-toast'
 import {
   Rss, Building2, Search, RefreshCw, Loader2,
   Plus, Trash2, Power, PowerOff, X, Check,
-  Clock, ChevronDown, ChevronUp, ExternalLink, Sparkles, FileText
+  Clock, ChevronDown, ChevronUp, ExternalLink, Sparkles, FileText, Target, Save
 } from 'lucide-react'
 import {
   useSourceTemplates,
@@ -15,6 +15,8 @@ import {
   useToggleSource,
   useDeleteSource,
 } from '../hooks/useSources'
+import { useUpdateTargetRoles } from '../hooks/useSettings'
+import { useAuth } from '../auth/AuthProvider'
 import { ConfirmModal } from '../components/ui'
 import ResumeManager from '../components/ResumeManager'
 import SyncScheduleManager from '../components/SyncScheduleManager'
@@ -53,6 +55,7 @@ function formatTimeAgo(dateString) {
 
 // Section 1: My Active Sources
 function MyActiveSources({ sources, onToggle, onDelete, isLoading }) {
+  const [expanded, setExpanded] = useState(true)
   const [deleteConfirm, setDeleteConfirm] = useState(null)
   const [isDeleting, setIsDeleting] = useState(false)
   const toggleMutation = useToggleSource()
@@ -101,7 +104,10 @@ function MyActiveSources({ sources, onToggle, onDelete, isLoading }) {
 
   return (
     <div className="bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700">
-      <div className="px-4 py-3 border-b border-slate-200 dark:border-slate-700">
+      <button
+        onClick={() => setExpanded(!expanded)}
+        className="w-full px-4 py-3 flex items-center justify-between hover:bg-slate-50 dark:hover:bg-slate-700/50 transition-colors"
+      >
         <h2 className="text-lg font-semibold text-slate-900 dark:text-white flex items-center gap-2">
           <RefreshCw size={20} className="text-blue-600" />
           My Active Sources
@@ -109,9 +115,10 @@ function MyActiveSources({ sources, onToggle, onDelete, isLoading }) {
             ({enabledCount} active / {sources.length} total)
           </span>
         </h2>
-      </div>
+        {expanded ? <ChevronUp size={20} className="text-slate-400" /> : <ChevronDown size={20} className="text-slate-400" />}
+      </button>
 
-      {sources.length === 0 ? (
+      {expanded && sources.length === 0 ? (
         <div className="p-8 text-center">
           <div className="w-12 h-12 bg-slate-100 dark:bg-slate-700 rounded-full flex items-center justify-center mx-auto mb-3">
             <Rss size={24} className="text-slate-400" />
@@ -121,8 +128,8 @@ function MyActiveSources({ sources, onToggle, onDelete, isLoading }) {
             Browse the catalog below or add a custom source to get started.
           </p>
         </div>
-      ) : (
-        <div className="divide-y divide-slate-100 dark:divide-slate-700">
+      ) : expanded ? (
+        <div className="divide-y divide-slate-100 dark:divide-slate-700 border-t border-slate-200 dark:border-slate-700">
           {sources.map(source => {
             const config = PLATFORM_CONFIG[source.platform] || PLATFORM_CONFIG.rss
             const Icon = config.icon
@@ -179,7 +186,7 @@ function MyActiveSources({ sources, onToggle, onDelete, isLoading }) {
             )
           })}
         </div>
-      )}
+      ) : null}
 
       <ConfirmModal
         isOpen={!!deleteConfirm}
@@ -197,6 +204,7 @@ function MyActiveSources({ sources, onToggle, onDelete, isLoading }) {
 
 // Section: Suggested Sources (based on resume)
 function SuggestedSources({ existingSources }) {
+  const [expanded, setExpanded] = useState(true)
   const { data: suggestionsData, isLoading } = useSourceSuggestions()
   const addFromTemplate = useAddFromTemplate()
 
@@ -249,25 +257,36 @@ function SuggestedSources({ existingSources }) {
     return null
   }
 
+  const suggestionCount = suggestionsData?.suggestions?.length || 0
+
   return (
     <div className="bg-gradient-to-r from-purple-50 to-indigo-50 dark:from-purple-900/20 dark:to-indigo-900/20 rounded-lg border border-purple-200 dark:border-purple-800">
-      <div className="px-4 py-3 border-b border-purple-200 dark:border-purple-800">
-        <h2 className="text-lg font-semibold text-slate-900 dark:text-white flex items-center gap-2">
-          <Sparkles size={20} className="text-purple-600" />
-          Suggested Sources
-        </h2>
-        <p className="text-sm text-slate-600 dark:text-slate-400 mt-1 flex items-center gap-1.5">
-          <FileText size={14} />
-          Based on your resume: {suggestionsData?.resume_name}
-        </p>
-      </div>
+      <button
+        onClick={() => setExpanded(!expanded)}
+        className="w-full px-4 py-3 flex items-center justify-between hover:bg-purple-100/50 dark:hover:bg-purple-900/30 transition-colors"
+      >
+        <div>
+          <h2 className="text-lg font-semibold text-slate-900 dark:text-white flex items-center gap-2">
+            <Sparkles size={20} className="text-purple-600" />
+            Suggested Sources
+            <span className="text-sm font-normal text-slate-500 dark:text-slate-400">
+              ({suggestionCount})
+            </span>
+          </h2>
+          <p className="text-sm text-slate-600 dark:text-slate-400 mt-1 flex items-center gap-1.5">
+            <FileText size={14} />
+            Based on your resume: {suggestionsData?.resume_name}
+          </p>
+        </div>
+        {expanded ? <ChevronUp size={20} className="text-slate-400" /> : <ChevronDown size={20} className="text-slate-400" />}
+      </button>
 
-      {isLoading ? (
+      {!expanded ? null : isLoading ? (
         <div className="flex items-center justify-center py-8">
           <Loader2 className="animate-spin text-purple-400" size={24} />
         </div>
       ) : (
-        <div className="divide-y divide-purple-100 dark:divide-purple-800/50">
+        <div className="divide-y divide-purple-100 dark:divide-purple-800/50 border-t border-purple-200 dark:border-purple-800">
           {suggestionsData?.suggestions?.map((template, index) => {
             const added = isTemplateAdded(template)
             const config = PLATFORM_CONFIG[template.platform]
@@ -328,6 +347,7 @@ function SuggestedSources({ existingSources }) {
 
 // Section 2: Source Catalog
 function SourceCatalog({ existingSources }) {
+  const [expanded, setExpanded] = useState(false) // Collapsed by default
   const [searchQuery, setSearchQuery] = useState('')
   const [activeTab, setActiveTab] = useState('greenhouse')
   const { data: templatesData, isLoading } = useSourceTemplates()
@@ -405,20 +425,36 @@ function SourceCatalog({ existingSources }) {
 
   const currentTemplates = filteredTemplates[activeTab] || []
 
+  const totalTemplates = (filteredTemplates.greenhouse?.length || 0) +
+    (filteredTemplates.workday?.length || 0) +
+    (filteredTemplates.lever?.length || 0) +
+    (filteredTemplates.rss?.length || 0)
+
   return (
     <div className="bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700">
-      <div className="px-4 py-3 border-b border-slate-200 dark:border-slate-700">
-        <h2 className="text-lg font-semibold text-slate-900 dark:text-white flex items-center gap-2">
-          <Building2 size={20} className="text-purple-600" />
-          Source Catalog
-        </h2>
-        <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
-          Browse curated job sources and add them to your account
-        </p>
-      </div>
+      <button
+        onClick={() => setExpanded(!expanded)}
+        className="w-full px-4 py-3 flex items-center justify-between hover:bg-slate-50 dark:hover:bg-slate-700/50 transition-colors"
+      >
+        <div>
+          <h2 className="text-lg font-semibold text-slate-900 dark:text-white flex items-center gap-2">
+            <Building2 size={20} className="text-purple-600" />
+            Browse Source Catalog
+            <span className="text-sm font-normal text-slate-500 dark:text-slate-400">
+              ({totalTemplates})
+            </span>
+          </h2>
+          <p className="text-sm text-slate-500 dark:text-slate-400 mt-1 text-left">
+            Browse curated job sources and add them to your account
+          </p>
+        </div>
+        {expanded ? <ChevronUp size={20} className="text-slate-400" /> : <ChevronDown size={20} className="text-slate-400" />}
+      </button>
 
+      {!expanded ? null : (
+        <>
       {/* Search Bar */}
-      <div className="px-4 py-3 border-b border-slate-200 dark:border-slate-700">
+      <div className="px-4 py-3 border-t border-slate-200 dark:border-slate-700">
         <div className="relative">
           <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
           <input
@@ -522,6 +558,8 @@ function SourceCatalog({ existingSources }) {
             )
           })}
         </div>
+      )}
+        </>
       )}
     </div>
   )
@@ -872,6 +910,115 @@ function AddCustomSource() {
   )
 }
 
+// Target Roles Section
+function TargetRolesSection() {
+  const { userProfile } = useAuth()
+  const [targetRoles, setTargetRoles] = useState([])
+  const [roleInput, setRoleInput] = useState('')
+  const updateTargetRoles = useUpdateTargetRoles()
+
+  // Initialize from profile
+  useEffect(() => {
+    if (userProfile?.target_job_titles) {
+      setTargetRoles(userProfile.target_job_titles)
+    }
+  }, [userProfile])
+
+  const handleAddRole = () => {
+    if (roleInput.trim() && targetRoles.length < 10 && !targetRoles.includes(roleInput.trim())) {
+      setTargetRoles([...targetRoles, roleInput.trim()])
+      setRoleInput('')
+    }
+  }
+
+  const handleRemoveRole = (index) => {
+    setTargetRoles(targetRoles.filter((_, i) => i !== index))
+  }
+
+  const handleSave = async () => {
+    await updateTargetRoles.mutateAsync(targetRoles)
+  }
+
+  return (
+    <div className="bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700">
+      <div className="px-4 py-3 border-b border-slate-200 dark:border-slate-700">
+        <h2 className="text-lg font-semibold text-slate-900 dark:text-white flex items-center gap-2">
+          <Target size={20} className="text-indigo-600" />
+          Target Roles
+        </h2>
+        <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
+          Job titles you're targeting. These improve AI scoring, especially without a resume.
+        </p>
+      </div>
+
+      <div className="p-4 space-y-4">
+        {/* Current roles */}
+        {targetRoles.length > 0 && (
+          <div className="flex flex-wrap gap-2">
+            {targetRoles.map((role, index) => (
+              <span
+                key={index}
+                className="inline-flex items-center gap-1 px-3 py-1.5 bg-indigo-100 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300 rounded-full text-sm"
+              >
+                {role}
+                <button
+                  onClick={() => handleRemoveRole(index)}
+                  className="p-0.5 hover:bg-indigo-200 dark:hover:bg-indigo-800 rounded-full"
+                >
+                  <X size={14} />
+                </button>
+              </span>
+            ))}
+          </div>
+        )}
+
+        {/* Add new role */}
+        <div className="flex gap-2">
+          <input
+            type="text"
+            value={roleInput}
+            onChange={(e) => setRoleInput(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') {
+                e.preventDefault()
+                handleAddRole()
+              }
+            }}
+            placeholder="e.g., Software Engineer"
+            className="flex-1 px-3 py-2 text-sm border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-slate-900 dark:text-white"
+          />
+          <button
+            onClick={handleAddRole}
+            disabled={!roleInput.trim() || targetRoles.length >= 10}
+            className="px-3 py-2 bg-indigo-600 hover:bg-indigo-700 disabled:bg-slate-300 dark:disabled:bg-slate-600 text-white rounded-lg transition-colors"
+          >
+            <Plus size={18} />
+          </button>
+        </div>
+
+        {targetRoles.length >= 10 && (
+          <p className="text-xs text-amber-600 dark:text-amber-400">
+            Maximum of 10 target roles allowed
+          </p>
+        )}
+
+        <button
+          onClick={handleSave}
+          disabled={updateTargetRoles.isPending}
+          className="flex items-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 disabled:bg-indigo-400 text-white text-sm font-medium rounded-lg"
+        >
+          {updateTargetRoles.isPending ? (
+            <Loader2 size={16} className="animate-spin" />
+          ) : (
+            <Save size={16} />
+          )}
+          Save Target Roles
+        </button>
+      </div>
+    </div>
+  )
+}
+
 // Main Page Component
 export default function ImportPage() {
   const queryClient = useQueryClient()
@@ -901,6 +1048,9 @@ export default function ImportPage() {
 
       {/* Section 3: Add Custom Source */}
       <AddCustomSource />
+
+      {/* Target Roles */}
+      <TargetRolesSection />
 
       {/* Resume Manager */}
       <ResumeManager />

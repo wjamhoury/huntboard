@@ -6,6 +6,12 @@ Scoring modes:
 1. With resumes: Full hybrid scoring (60% deterministic + 40% AI using resume text)
 2. With target_job_titles only: Simplified title matching (no AI call to save costs)
 3. With both: Hybrid scoring with title boost
+
+Resume matching behavior:
+- ALL user resumes are passed to the AI for analysis (not just the primary resume)
+- The AI evaluates each resume against the job and selects the best_resume_id
+- The selected resume is stored on the job.resume_id field
+- This allows users to have multiple resumes targeted at different roles
 """
 import logging
 import os

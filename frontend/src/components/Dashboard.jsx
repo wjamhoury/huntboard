@@ -33,6 +33,7 @@ import {
 } from 'recharts'
 import { analyticsApi, adminApi } from '../services/api'
 import { useAuth } from '../auth/AuthProvider'
+import { SCORE_RANGE_COLORS } from '../utils/scoreColors'
 
 // Admin email list - must match backend
 const ADMIN_EMAILS = ['william.jamhoury@gmail.com']
@@ -48,14 +49,7 @@ const STATUS_COLORS = {
   archived: '#6b7280'
 }
 
-const SCORE_COLORS = {
-  '0-20': '#ef4444',
-  '20-40': '#f59e0b',
-  '40-60': '#eab308',
-  '60-80': '#22c55e',
-  '80-100': '#10b981',
-  'Unscored': '#94a3b8'
-}
+// Using SCORE_RANGE_COLORS from scoreColors utility for consistency
 
 const SOURCE_COLORS = ['#8b5cf6', '#3b82f6', '#22c55e', '#f59e0b', '#ef4444', '#ec4899', '#06b6d4']
 
@@ -145,7 +139,7 @@ function Dashboard() {
   const scoreData = data.score_distribution.map(item => ({
     range: item.range,
     count: item.count,
-    fill: SCORE_COLORS[item.range] || '#94a3b8'
+    fill: SCORE_RANGE_COLORS[item.range] || '#94a3b8'
   }))
 
   // Format daily activity for chart

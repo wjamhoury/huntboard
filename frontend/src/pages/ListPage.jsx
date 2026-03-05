@@ -9,8 +9,6 @@ import FilterBar from '../components/FilterBar'
 
 export default function ListPage() {
   const [selectedJob, setSelectedJob] = useState(null)
-  const [isSelectMode, setIsSelectMode] = useState(false)
-  const [selectedJobs, setSelectedJobs] = useState(new Set())
 
   // Get filters from URL params
   const { apiParams } = useJobFilters()
@@ -41,16 +39,6 @@ export default function ListPage() {
     }
   }
 
-  const handleToggleSelect = (jobId) => {
-    const newSelected = new Set(selectedJobs)
-    if (newSelected.has(jobId)) {
-      newSelected.delete(jobId)
-    } else {
-      newSelected.add(jobId)
-    }
-    setSelectedJobs(newSelected)
-  }
-
   if (isLoading) {
     return (
       <div className="p-4 flex items-center justify-center h-64">
@@ -68,9 +56,6 @@ export default function ListPage() {
         jobs={jobs}
         onJobClick={setSelectedJob}
         onUpdateJob={handleUpdateJob}
-        isSelectMode={isSelectMode}
-        selectedJobs={selectedJobs}
-        onToggleSelect={handleToggleSelect}
       />
 
       {selectedJob && (

@@ -21,6 +21,7 @@ import {
   useUpdateJobStatusDetail,
   useScoreJob,
 } from '../hooks/useJobDetail'
+import { getScoreTextClasses, getScoreStrokeClass } from '../utils/scoreColors'
 
 const STATUS_OPTIONS = [
   { value: 'new', label: 'New', color: 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-300' },
@@ -46,20 +47,6 @@ function ScoreCircle({ score }) {
   const progress = score ? (score / 100) * circumference : 0
   const strokeDashoffset = circumference - progress
 
-  const getScoreColor = (s) => {
-    if (s >= 80) return 'text-green-500'
-    if (s >= 60) return 'text-yellow-500'
-    if (s >= 40) return 'text-orange-500'
-    return 'text-red-500'
-  }
-
-  const getStrokeColor = (s) => {
-    if (s >= 80) return 'stroke-green-500'
-    if (s >= 60) return 'stroke-yellow-500'
-    if (s >= 40) return 'stroke-orange-500'
-    return 'stroke-red-500'
-  }
-
   return (
     <div className="relative w-24 h-24">
       <svg className="w-24 h-24 transform -rotate-90">
@@ -80,7 +67,7 @@ function ScoreCircle({ score }) {
             strokeWidth="8"
             fill="transparent"
             strokeLinecap="round"
-            className={getStrokeColor(score)}
+            className={getScoreStrokeClass(score)}
             style={{
               strokeDasharray: circumference,
               strokeDashoffset,
@@ -91,7 +78,7 @@ function ScoreCircle({ score }) {
       </svg>
       <div className="absolute inset-0 flex items-center justify-center">
         {score !== null && score !== undefined ? (
-          <span className={`text-2xl font-bold ${getScoreColor(score)}`}>{score}%</span>
+          <span className={`text-2xl font-bold ${getScoreTextClasses(score)}`}>{score}%</span>
         ) : (
           <span className="text-sm text-gray-400">N/A</span>
         )}

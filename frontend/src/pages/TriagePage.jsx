@@ -1,9 +1,11 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { useTriageJobs, useUpdateJobStatus } from '../hooks/useTriageJobs'
 import { useJobFilters } from '../hooks/useJobFilters'
-import { X, Check, Star, Undo2, MapPin, Building2, DollarSign, Loader2 } from 'lucide-react'
+import { X, Check, Star, Undo2, MapPin, Building2, DollarSign, Loader2, Wifi, ChevronDown, ChevronUp, ExternalLink, Target } from 'lucide-react'
 import toast from 'react-hot-toast'
 import FilterBar from '../components/FilterBar'
+import { getScoreTextClasses, getScoreBadgeClasses } from '../utils/scoreColors'
 
 const SOURCE_COLORS = {
   greenhouse: 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400',
@@ -27,15 +29,23 @@ function SourceBadge({ source }) {
 function MatchScore({ score }) {
   if (score == null) return null
 
-  let colorClass = 'text-gray-500'
-  if (score >= 80) colorClass = 'text-green-600 dark:text-green-400'
-  else if (score >= 60) colorClass = 'text-yellow-600 dark:text-yellow-400'
-  else if (score >= 40) colorClass = 'text-orange-600 dark:text-orange-400'
-  else colorClass = 'text-red-600 dark:text-red-400'
-
   return (
-    <div className={`text-2xl font-bold ${colorClass}`}>
-      {score}% Match
+    <div className="flex items-center gap-3">
+      <div className={`flex items-center gap-2 px-3 py-1.5 rounded-full ${getScoreBadgeClasses(score)}`}>
+        <Target size={18} />
+        <span className="text-xl font-bold">{score}%</span>
+      </div>
+      <div className="flex-1 h-2 bg-slate-200 dark:bg-slate-700 rounded-full overflow-hidden">
+        <div
+          className={`h-full rounded-full transition-all ${
+            score >= 80 ? 'bg-green-500' :
+            score >= 60 ? 'bg-yellow-500' :
+            score >= 40 ? 'bg-orange-500' :
+            'bg-red-500'
+          }`}
+          style={{ width: `${score}%` }}
+        />
+      </div>
     </div>
   )
 }
@@ -63,6 +73,7 @@ function SwipeCard({ job, onSwipe, isTop, stackIndex }) {
   const contentRef = useRef(null)
   const [dragState, setDragState] = useState({ x: 0, y: 0, isDragging: false })
   const [swipeDirection, setSwipeDirection] = useState(null)
+  const [isExpanded, setIsExpanded] = useState(false)
   const startPos = useRef({ x: 0, y: 0 })
   const isScrolling = useRef(false)
 
@@ -204,31 +215,34 @@ function SwipeCard({ job, onSwipe, isTop, stackIndex }) {
         swipeDirection === 'up' ? 'border-blue-500' :
         'border-transparent'
       }`}>
-        {/* Swipe overlays */}
+        {/* Swipe overlays - enhanced with icons and animations */}
         {swipeDirection === 'right' && (
-          <div className="absolute inset-0 bg-green-500/20 flex items-center justify-center z-10 pointer-events-none">
-            <div className="bg-green-500 text-white px-6 py-3 rounded-full font-bold text-xl transform -rotate-12">
+          <div className="absolute inset-0 bg-gradient-to-r from-green-500/30 to-green-500/10 flex items-center justify-center z-10 pointer-events-none animate-pulse">
+            <div className="bg-green-500 text-white px-8 py-4 rounded-2xl font-bold text-2xl transform -rotate-12 shadow-lg flex items-center gap-3">
+              <Check size={28} strokeWidth={3} />
               KEEP
             </div>
           </div>
         )}
         {swipeDirection === 'left' && (
-          <div className="absolute inset-0 bg-red-500/20 flex items-center justify-center z-10 pointer-events-none">
-            <div className="bg-red-500 text-white px-6 py-3 rounded-full font-bold text-xl transform rotate-12">
+          <div className="absolute inset-0 bg-gradient-to-l from-red-500/30 to-red-500/10 flex items-center justify-center z-10 pointer-events-none animate-pulse">
+            <div className="bg-red-500 text-white px-8 py-4 rounded-2xl font-bold text-2xl transform rotate-12 shadow-lg flex items-center gap-3">
+              <X size={28} strokeWidth={3} />
               ARCHIVE
             </div>
           </div>
         )}
         {swipeDirection === 'up' && (
-          <div className="absolute inset-0 bg-blue-500/20 flex items-center justify-center z-10 pointer-events-none">
-            <div className="bg-blue-500 text-white px-6 py-3 rounded-full font-bold text-xl">
+          <div className="absolute inset-0 bg-gradient-to-t from-blue-500/30 to-blue-500/10 flex items-center justify-center z-10 pointer-events-none animate-pulse">
+            <div className="bg-blue-500 text-white px-8 py-4 rounded-2xl font-bold text-2xl shadow-lg flex items-center gap-3">
+              <Star size={28} strokeWidth={3} />
               SAVE
             </div>
           </div>
         )}
 
         {/* Card content - scrollable on mobile for long descriptions */}
-        <div ref={contentRef} className="p-5 md:p-6 max-h-[50vh] md:max-h-none overflow-y-auto">
+        <div ref={contentRef} className={`p-5 md:p-6 overflow-y-auto transition-all ${isExpanded ? 'max-h-[70vh]' : 'max-h-[50vh] md:max-h-none'}`}>
           {/* Header */}
           <div className="flex items-start justify-between gap-3 mb-3">
             <div className="flex-1 min-w-0">
@@ -243,31 +257,74 @@ function SwipeCard({ job, onSwipe, isTop, stackIndex }) {
             <SourceBadge source={job.source} />
           </div>
 
-          {/* Match score */}
-          <div className="mb-3">
+          {/* Match score with progress bar */}
+          <div className="mb-4">
             <MatchScore score={job.match_score} />
           </div>
 
-          {/* Meta info */}
-          <div className="flex flex-wrap gap-2 mb-3 text-sm text-slate-600 dark:text-slate-400">
+          {/* Meta info - enhanced with remote type */}
+          <div className="flex flex-wrap gap-2 mb-4 text-sm">
             {job.location && (
-              <div className="flex items-center gap-1">
+              <div className="flex items-center gap-1 px-2 py-1 bg-slate-100 dark:bg-slate-700 rounded-full text-slate-600 dark:text-slate-300">
                 <MapPin size={14} className="flex-shrink-0" />
-                <span className="truncate max-w-[150px]">{job.location}</span>
+                <span className="truncate max-w-[120px]">{job.location}</span>
+              </div>
+            )}
+            {job.remote_type && job.remote_type !== 'unknown' && (
+              <div className="flex items-center gap-1 px-2 py-1 bg-blue-100 dark:bg-blue-900/30 rounded-full text-blue-600 dark:text-blue-400">
+                <Wifi size={14} className="flex-shrink-0" />
+                <span>{job.remote_type === 'remote' ? 'Remote' : job.remote_type === 'hybrid' ? 'Hybrid' : 'On-site'}</span>
               </div>
             )}
             {salary && (
-              <div className="flex items-center gap-1">
+              <div className="flex items-center gap-1 px-2 py-1 bg-green-100 dark:bg-green-900/30 rounded-full text-green-600 dark:text-green-400">
                 <DollarSign size={14} className="flex-shrink-0" />
                 <span>{salary}</span>
               </div>
             )}
           </div>
 
-          {/* Description snippet - more lines on mobile */}
-          <p className="text-sm text-slate-600 dark:text-slate-400 leading-relaxed line-clamp-4 md:line-clamp-3">
-            {getDescriptionSnippet(job.description, 300)}
-          </p>
+          {/* Description with expand/collapse */}
+          <div className="relative">
+            <p className={`text-sm text-slate-600 dark:text-slate-400 leading-relaxed ${isExpanded ? '' : 'line-clamp-3'}`}>
+              {isExpanded ? job.description?.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim() : getDescriptionSnippet(job.description, 200)}
+            </p>
+            {job.description && job.description.length > 200 && (
+              <button
+                onClick={(e) => {
+                  e.stopPropagation()
+                  setIsExpanded(!isExpanded)
+                }}
+                className="flex items-center gap-1 mt-2 text-xs text-blue-600 dark:text-blue-400 font-medium hover:underline"
+              >
+                {isExpanded ? (
+                  <>
+                    <ChevronUp size={14} />
+                    Show less
+                  </>
+                ) : (
+                  <>
+                    <ChevronDown size={14} />
+                    Read more
+                  </>
+                )}
+              </button>
+            )}
+          </div>
+
+          {/* View full listing link */}
+          {job.url && (
+            <a
+              href={job.url}
+              target="_blank"
+              rel="noopener noreferrer"
+              onClick={(e) => e.stopPropagation()}
+              className="inline-flex items-center gap-1 mt-3 text-xs text-blue-600 dark:text-blue-400 font-medium hover:underline"
+            >
+              <ExternalLink size={12} />
+              View full listing
+            </a>
+          )}
         </div>
       </div>
     </div>
@@ -298,49 +355,67 @@ function ActionButton({ onClick, icon: Icon, label, variant, disabled, showPulse
   )
 }
 
-function CompletionScreen({ stats }) {
+function CompletionScreen({ stats, onNavigateToBoard }) {
   return (
-    <div className="flex flex-col items-center justify-center text-center py-12 px-6">
-      <div className="text-6xl mb-4">🎉</div>
+    <div className="flex flex-col items-center justify-center text-center py-8 px-6 bg-white dark:bg-slate-800 rounded-2xl shadow-lg border border-slate-200 dark:border-slate-700">
+      <div className="w-20 h-20 bg-gradient-to-br from-green-400 to-emerald-500 rounded-full flex items-center justify-center mb-4 shadow-lg">
+        <Check size={40} className="text-white" />
+      </div>
       <h2 className="text-2xl font-bold text-slate-900 dark:text-white mb-2">
         All caught up!
       </h2>
       <p className="text-slate-600 dark:text-slate-400 mb-6">
-        You reviewed {stats.total} jobs, kept {stats.kept}, saved {stats.saved}, archived {stats.archived}.
+        You reviewed {stats.total} job{stats.total !== 1 ? 's' : ''} in this session
       </p>
-      <div className="grid grid-cols-3 gap-4 w-full max-w-sm">
-        <div className="bg-green-50 dark:bg-green-900/20 rounded-lg p-4">
-          <div className="text-2xl font-bold text-green-600 dark:text-green-400">{stats.kept}</div>
-          <div className="text-xs text-green-600 dark:text-green-400">Kept</div>
+      <div className="grid grid-cols-3 gap-3 w-full max-w-sm mb-6">
+        <div className="bg-green-50 dark:bg-green-900/20 rounded-xl p-4 border border-green-100 dark:border-green-800">
+          <div className="text-3xl font-bold text-green-600 dark:text-green-400">{stats.kept}</div>
+          <div className="text-sm text-green-600 dark:text-green-400 font-medium">Kept</div>
         </div>
-        <div className="bg-blue-50 dark:bg-blue-900/20 rounded-lg p-4">
-          <div className="text-2xl font-bold text-blue-600 dark:text-blue-400">{stats.saved}</div>
-          <div className="text-xs text-blue-600 dark:text-blue-400">Saved</div>
+        <div className="bg-blue-50 dark:bg-blue-900/20 rounded-xl p-4 border border-blue-100 dark:border-blue-800">
+          <div className="text-3xl font-bold text-blue-600 dark:text-blue-400">{stats.saved}</div>
+          <div className="text-sm text-blue-600 dark:text-blue-400 font-medium">Saved</div>
         </div>
-        <div className="bg-red-50 dark:bg-red-900/20 rounded-lg p-4">
-          <div className="text-2xl font-bold text-red-600 dark:text-red-400">{stats.archived}</div>
-          <div className="text-xs text-red-600 dark:text-red-400">Archived</div>
+        <div className="bg-red-50 dark:bg-red-900/20 rounded-xl p-4 border border-red-100 dark:border-red-800">
+          <div className="text-3xl font-bold text-red-600 dark:text-red-400">{stats.archived}</div>
+          <div className="text-sm text-red-600 dark:text-red-400 font-medium">Archived</div>
         </div>
       </div>
+      <button
+        onClick={onNavigateToBoard}
+        className="px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg transition-colors"
+      >
+        View Your Board
+      </button>
     </div>
   )
 }
 
-function EmptyState() {
+function EmptyState({ onNavigateToSources }) {
   return (
-    <div className="flex flex-col items-center justify-center text-center py-12 px-6">
-      <div className="text-6xl mb-4">📭</div>
+    <div className="flex flex-col items-center justify-center text-center py-12 px-6 bg-white dark:bg-slate-800 rounded-2xl shadow-lg border border-slate-200 dark:border-slate-700">
+      <div className="w-20 h-20 bg-slate-100 dark:bg-slate-700 rounded-full flex items-center justify-center mb-4">
+        <Star size={40} className="text-slate-400" />
+      </div>
       <h2 className="text-2xl font-bold text-slate-900 dark:text-white mb-2">
         No new jobs to triage
       </h2>
-      <p className="text-slate-600 dark:text-slate-400">
-        Check back later or import more job sources.
+      <p className="text-slate-600 dark:text-slate-400 mb-6 max-w-sm">
+        All caught up! New jobs will appear here when your sources sync.
       </p>
+      <button
+        onClick={onNavigateToSources}
+        className="px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg transition-colors"
+      >
+        Add More Sources
+      </button>
     </div>
   )
 }
 
 export default function TriagePage() {
+  const navigate = useNavigate()
+
   // Get filters from URL params (status is always 'new' for triage)
   const { apiParams, hasActiveFilters } = useJobFilters()
 
@@ -533,8 +608,8 @@ export default function TriagePage() {
 
         {/* Card stack - taller on mobile to use more screen space */}
         <div className="relative h-[55vh] md:h-[420px] mb-4 md:mb-8">
-          {isEmpty && <EmptyState />}
-          {isComplete && <CompletionScreen stats={stats} />}
+          {isEmpty && <EmptyState onNavigateToSources={() => navigate('/import')} />}
+          {isComplete && <CompletionScreen stats={stats} onNavigateToBoard={() => navigate('/board')} />}
 
           {!isEmpty && !isComplete && remainingJobs.slice(0, 3).map((job, index) => {
             const isTop = index === 0

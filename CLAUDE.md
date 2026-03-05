@@ -49,7 +49,7 @@ User → CloudFront → S3 (React SPA)
 │   │   ├── hooks/               # React Query hooks (useJobs, useTriageJobs, useJobFilters, etc.)
 │   │   ├── components/          # FilterBar, ErrorBoundary, ConnectionStatus, kanban/, mobile/
 │   │   ├── services/api.js      # Axios instance with auth interceptor
-│   │   └── utils/               # errorHandler.js
+│   │   └── utils/               # errorHandler.js, scoreColors.js
 │   ├── .env                     # Local dev config
 │   └── .env.production          # Production config
 ├── infra/terraform/             # AWS infra: VPC, EC2, S3, CloudFront, Cognito, ECR, IAM
@@ -226,6 +226,43 @@ The Kanban board uses `@dnd-kit/core` for drag-and-drop functionality with the f
 
 **Collision Detection:** Uses `pointerWithin` for reliable cross-column drops
 
+### Score Color Utility
+
+All job match score displays use a shared utility for consistent colors across the app:
+
+**File:** `frontend/src/utils/scoreColors.js`
+
+**Color scheme (matches email digests):**
+- 80-100: Green (great match)
+- 60-79: Yellow/Amber (good match)
+- 40-59: Orange (moderate match)
+- 0-39: Red (weak match)
+
+**Exports:**
+- `getScoreBadgeClasses(score)` — Tailwind classes for badge background + text
+- `getScoreTextClasses(score)` — Tailwind classes for text color only
+- `getScoreStrokeClass(score)` — SVG stroke classes for circular progress
+- `getScoreHexColor(score)` — Hex color for charts
+- `SCORE_RANGE_COLORS` — Color map for histogram ranges
+
+### Page Structure
+
+**Settings Page (`/settings`):**
+- Profile (display name)
+- Preferences (sort order, auto-archive)
+- Link to Sources & Target Roles (`/import`)
+- Data Management (export, delete)
+- About section
+
+**Import/Sources Page (`/import`):**
+- My Active Sources (collapsible accordion)
+- Suggested Sources (collapsible, based on resume)
+- Browse Source Catalog (collapsible, default collapsed)
+- Add Custom Source (expandable form)
+- Target Roles (tag editor)
+- Resume Manager
+- Sync Schedule Manager
+
 ## AI Scoring Pipeline
 
 The AI scoring system is the core value proposition of HuntBoard. It automatically scores job matches against user's resumes or target job titles.
@@ -247,6 +284,7 @@ Job Import → Queue for Scoring → Hybrid Score (60% deterministic + 40% AI) �
 1. **With Resumes** — Full hybrid scoring:
    - 60% deterministic (title alignment, skill match, domain, seniority, location)
    - 40% AI semantic analysis (Claude Haiku reads resume text and job description)
+   - **ALL user resumes** are passed to the AI (not just primary) — Claude selects best match
    - Returns best-matching `resume_id`
 
 2. **With Target Job Titles Only** (no resume) — Simplified matching:
@@ -296,7 +334,7 @@ target_job_titles = Column(JSON, nullable=True, default=list)
 
 **Where to set:**
 - During onboarding (required if resume skipped)
-- In Settings → Target Roles section
+- On the Import/Sources page (`/import`) — dedicated Target Roles section
 
 ### Score Fields on Job Model
 

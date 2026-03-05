@@ -6,6 +6,7 @@ import { aiApi } from '../../services/api'
 import PromptModal from '../PromptModal'
 import { ConfirmModal } from '../ui'
 import { isFollowUpDue, addDaysToToday } from './constants'
+import { getScoreTextClasses } from '../../utils/scoreColors'
 
 export default function JobDetailPanel({ job, onClose, onUpdate, onDelete, resumes = [] }) {
   const [isEditing, setIsEditing] = useState(false)
@@ -513,12 +514,7 @@ export default function JobDetailPanel({ job, onClose, onUpdate, onDelete, resum
                 <label className="block text-sm font-medium text-slate-700 dark:text-slate-300">
                   Match Analysis
                 </label>
-                <span className={`text-lg font-bold ${
-                  job.match_score >= 90 ? 'text-green-600 dark:text-green-400'
-                  : job.match_score >= 75 ? 'text-emerald-600 dark:text-emerald-400'
-                  : job.match_score >= 50 ? 'text-yellow-600 dark:text-yellow-400'
-                  : 'text-red-600 dark:text-red-400'
-                }`}>
+                <span className={`text-lg font-bold ${getScoreTextClasses(job.match_score)}`}>
                   {job.match_score}/100
                 </span>
               </div>

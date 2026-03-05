@@ -4,10 +4,9 @@ import {
   ChevronDown,
   Archive,
   ExternalLink,
-  CheckSquare,
-  Square,
   Target,
 } from 'lucide-react'
+import { getScoreBadgeClasses } from '../utils/scoreColors'
 
 const STATUSES = ['new', 'saved', 'reviewing', 'applied', 'interviewing', 'offer', 'rejected', 'archived']
 
@@ -102,9 +101,6 @@ function ListView({
   jobs,
   onJobClick,
   onUpdateJob,
-  isSelectMode,
-  selectedJobs,
-  onToggleSelect,
 }) {
   const [prefs, setPrefs] = useState(loadPreferences)
   const [hoveredRow, setHoveredRow] = useState(null)
@@ -244,14 +240,6 @@ function ListView({
         <table className="w-full min-w-[900px]">
           <thead className="bg-slate-50 dark:bg-slate-900 sticky top-0 z-10">
             <tr>
-              {/* Checkbox column */}
-              <th className="w-10 px-4 py-3">
-                {isSelectMode && (
-                  <span className="text-xs font-medium text-slate-500 dark:text-slate-400">
-                    {selectedJobs.size}
-                  </span>
-                )}
-              </th>
               {/* Priority */}
               <SortHeader column="priority" className="w-16">
                 Pri
@@ -296,7 +284,6 @@ function ListView({
           </thead>
           <tbody className="divide-y divide-slate-200 dark:divide-slate-700">
             {sortedJobs.map((job, index) => {
-              const isSelected = selectedJobs.has(job.id)
               const isHovered = hoveredRow === job.id
               const hasFollowUpDue = isFollowUpDue(job.follow_up_date)
               const isArchived = job.status === 'archived'
@@ -316,7 +303,6 @@ function ListView({
                     ${leftBorderClass}
                     ${index % 2 === 0 ? 'bg-white dark:bg-slate-800' : 'bg-slate-50/50 dark:bg-slate-800/50'}
                     ${isHovered ? 'bg-slate-100 dark:bg-slate-700' : ''}
-                    ${isSelected ? 'bg-purple-50 dark:bg-purple-900/20' : ''}
                     ${isArchived ? 'opacity-60' : ''}
                     cursor-pointer transition-colors
                   `}
@@ -324,22 +310,6 @@ function ListView({
                   onMouseLeave={() => setHoveredRow(null)}
                   onClick={() => onJobClick(job)}
                 >
-                  {/* Checkbox */}
-                  <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
-                    {(isSelectMode || isHovered) && (
-                      <button
-                        onClick={() => onToggleSelect(job.id)}
-                        className="p-1 hover:bg-slate-200 dark:hover:bg-slate-600 rounded"
-                      >
-                        {isSelected ? (
-                          <CheckSquare size={18} className="text-purple-600" />
-                        ) : (
-                          <Square size={18} className="text-slate-400" />
-                        )}
-                      </button>
-                    )}
-                  </td>
-
                   {/* Priority */}
                   <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
                     <button
@@ -353,15 +323,7 @@ function ListView({
                   <td className="px-4 py-3">
                     {job.match_score ? (
                       <span
-                        className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium ${
-                          job.match_score >= 90
-                            ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200'
-                            : job.match_score >= 80
-                            ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200'
-                            : job.match_score >= 70
-                            ? 'bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-200'
-                            : 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200'
-                        }`}
+                        className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium ${getScoreBadgeClasses(job.match_score)}`}
                         title={`Match Score: ${job.match_score}/100`}
                       >
                         <Target size={12} />
