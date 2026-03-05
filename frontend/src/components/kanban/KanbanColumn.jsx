@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useDroppable } from '@dnd-kit/core'
 import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable'
 import { Eye, EyeOff, MoreHorizontal, ArrowRight } from 'lucide-react'
 import JobCard from './JobCard'
@@ -14,9 +15,16 @@ export default function KanbanColumn({
   isHidden,
   onToggleHidden,
   onArchiveAll,
-  isExpanded
+  isExpanded,
+  activeId,
+  isDropTarget
 }) {
   const [showMenu, setShowMenu] = useState(false)
+
+  // Make the column a drop target
+  const { setNodeRef, isOver } = useDroppable({
+    id: column.id,
+  })
 
   const columnJobs = jobs.filter((job) => {
     if (column.id === 'closed') {
@@ -48,8 +56,18 @@ export default function KanbanColumn({
     )
   }
 
+  // Determine if we should highlight as drop target
+  const showDropHighlight = isDropTarget || isOver
+
   return (
-    <div className="bg-slate-100 dark:bg-slate-800 rounded-lg p-3 md:p-4 min-h-[400px] md:min-h-[500px] flex flex-col h-full">
+    <div
+      ref={setNodeRef}
+      className={`rounded-lg p-3 md:p-4 min-h-[400px] md:min-h-[500px] flex flex-col h-full transition-colors duration-150 ${
+        showDropHighlight
+          ? 'bg-blue-100 dark:bg-blue-900/30 ring-2 ring-blue-400 ring-inset'
+          : 'bg-slate-100 dark:bg-slate-800'
+      }`}
+    >
       <div className="flex items-center gap-2 mb-4">
         <div className={`w-3 h-3 rounded-full ${column.color}`} />
         <h2 className="font-semibold text-slate-700 dark:text-slate-200">{column.title}</h2>
@@ -104,6 +122,7 @@ export default function KanbanColumn({
               isSelectMode={isSelectMode}
               isSelected={selectedJobs.has(job.id)}
               onToggleSelect={onToggleSelect}
+              isDragging={activeId === job.id}
             />
           ))}
         </div>

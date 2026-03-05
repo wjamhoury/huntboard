@@ -1,5 +1,5 @@
-import { useState, useEffect, useCallback, useRef } from 'react'
-import { DndContext, closestCenter, KeyboardSensor, PointerSensor, TouchSensor, useSensor, useSensors } from '@dnd-kit/core'
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
+import { DndContext, DragOverlay, closestCenter, pointerWithin, KeyboardSensor, PointerSensor, TouchSensor, useSensor, useSensors } from '@dnd-kit/core'
 import {
   Plus, RefreshCw, CheckSquare, ChevronDown, Link, Trash2, ArrowRight, Bell, Sparkles, Briefcase
 } from 'lucide-react'
@@ -8,7 +8,7 @@ import { useJobs, useCreateJob, useUpdateJob, useDeleteJob, useBulkDeleteJobs, u
 import { useResumes } from '../hooks/useResumes'
 import { useSelectiveSync, useScoreJobs, useBatchStatus, useBatchRuns } from '../hooks/useSync'
 import { useJobFilters } from '../hooks/useJobFilters'
-import { KanbanColumn, JobDetailPanel, AddJobModal, ImportUrlModal, COLUMNS, CLOSED_STATUSES, STATUS_OPTIONS, isFollowUpDue } from '../components/kanban'
+import { KanbanColumn, JobDetailPanel, AddJobModal, ImportUrlModal, JobCardOverlay, COLUMNS, CLOSED_STATUSES, STATUS_OPTIONS, isFollowUpDue } from '../components/kanban'
 import { SkeletonKanbanColumn } from '../components/ui/Skeleton'
 import FilterBar from '../components/FilterBar'
 import SyncStatusIndicator from '../components/SyncStatusIndicator'
@@ -31,6 +31,8 @@ export default function KanbanPage() {
     return saved ? JSON.parse(saved) : { archived: true }
   })
   const [activeColumnIndex, setActiveColumnIndex] = useState(0)
+  const [activeId, setActiveId] = useState(null)
+  const [activeColumnId, setActiveColumnId] = useState(null)
   const scrollContainerRef = useRef(null)
 
   // Get filters from URL params
@@ -93,12 +95,28 @@ export default function KanbanPage() {
     return () => document.removeEventListener('keydown', handleKeyDown)
   }, [isAddModalOpen, isImportModalOpen, selectedJob, isSelectMode])
 
-  // Use TouchSensor with higher delay for mobile to allow scrolling
+  // Sensors for drag-and-drop
+  // PointerSensor: requires 8px movement before activating (prevents accidental drags)
+  // TouchSensor: requires 200ms hold + 8px movement (allows scrolling on mobile)
+  // KeyboardSensor: for accessibility
   const sensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
-    useSensor(TouchSensor, { activationConstraint: { delay: 250, tolerance: 5 } }),
+    useSensor(PointerSensor, {
+      activationConstraint: { distance: 8 }
+    }),
+    useSensor(TouchSensor, {
+      activationConstraint: {
+        delay: 200,
+        tolerance: 8
+      }
+    }),
     useSensor(KeyboardSensor)
   )
+
+  // Find active job for drag overlay
+  const activeJob = useMemo(() => {
+    if (!activeId) return null
+    return jobs.find((j) => j.id === activeId)
+  }, [activeId, jobs])
 
   // Get visible columns (not hidden)
   const visibleColumns = COLUMNS.filter(col => !hiddenColumns[col.id] || !col.hideable)
@@ -180,7 +198,7 @@ export default function KanbanPage() {
     }
   }
 
-  const handleUpdateJob = async (id, updates) => {
+  const handleUpdateJob = useCallback(async (id, updates) => {
     try {
       const result = await updateJob.mutateAsync({ id, data: updates })
       if (selectedJob?.id === id) {
@@ -189,7 +207,7 @@ export default function KanbanPage() {
     } catch (err) {
       toast.error('Failed to update job')
     }
-  }
+  }, [updateJob, selectedJob])
 
   const handleDeleteJob = async (id) => {
     try {
@@ -237,31 +255,92 @@ export default function KanbanPage() {
     }
   }
 
-  const handleDragEnd = async (event) => {
+  // Determine which column a job belongs to
+  const getColumnForStatus = useCallback((status) => {
+    if (CLOSED_STATUSES.includes(status)) return 'closed'
+    if (status === 'archived') return 'archived'
+    return status
+  }, [])
+
+  // Handle drag start - track the active item
+  const handleDragStart = useCallback((event) => {
+    const { active } = event
+    setActiveId(active.id)
+    const job = jobs.find((j) => j.id === active.id)
+    if (job) {
+      setActiveColumnId(getColumnForStatus(job.status))
+    }
+  }, [jobs, getColumnForStatus])
+
+  // Handle drag over - track which column we're hovering over
+  const handleDragOver = useCallback((event) => {
+    const { over } = event
+    if (!over) {
+      setActiveColumnId(null)
+      return
+    }
+
+    // Check if we're over a column directly
+    const overColumn = COLUMNS.find(col => col.id === over.id)
+    if (overColumn) {
+      setActiveColumnId(overColumn.id)
+      return
+    }
+
+    // Check if we're over a job card - find its column
+    const overJob = jobs.find((j) => j.id === over.id)
+    if (overJob) {
+      setActiveColumnId(getColumnForStatus(overJob.status))
+    }
+  }, [jobs, getColumnForStatus])
+
+  // Handle drag end - update job status with optimistic update
+  const handleDragEnd = useCallback(async (event) => {
     const { active, over } = event
+
+    // Reset drag state
+    setActiveId(null)
+    setActiveColumnId(null)
+
     if (!over) return
 
     const jobId = active.id
     const job = jobs.find((j) => j.id === jobId)
     if (!job) return
 
-    for (const column of COLUMNS) {
-      const columnJobs = jobs.filter((j) => {
-        if (column.id === 'closed') return CLOSED_STATUSES.includes(j.status)
-        if (column.id === 'archived') return j.status === 'archived'
-        return j.status === column.id
-      })
+    // Determine target column
+    let targetColumnId = null
 
-      if (columnJobs.some((j) => j.id === over.id) || column.id === over.id) {
-        let newStatus = column.id
-        if (column.id === 'closed') newStatus = 'rejected'
-        if (job.status !== newStatus) {
-          handleUpdateJob(jobId, { status: newStatus })
-        }
-        break
+    // Check if dropped on a column directly
+    const overColumn = COLUMNS.find(col => col.id === over.id)
+    if (overColumn) {
+      targetColumnId = overColumn.id
+    } else {
+      // Check if dropped on a job card - use that card's column
+      const overJob = jobs.find((j) => j.id === over.id)
+      if (overJob) {
+        targetColumnId = getColumnForStatus(overJob.status)
       }
     }
-  }
+
+    if (!targetColumnId) return
+
+    // Determine new status
+    let newStatus = targetColumnId
+    if (targetColumnId === 'closed') newStatus = 'rejected'
+
+    // Only update if status changed
+    const currentColumnId = getColumnForStatus(job.status)
+    if (currentColumnId !== targetColumnId) {
+      handleUpdateJob(jobId, { status: newStatus })
+    }
+  }, [jobs, getColumnForStatus, handleUpdateJob])
+
+  // Handle drag cancel - reset state
+  const handleDragCancel = useCallback(() => {
+    setActiveId(null)
+    setActiveColumnId(null)
+  }, [])
 
   const toggleColumnHidden = (columnId) => {
     const newHidden = { ...hiddenColumns, [columnId]: !hiddenColumns[columnId] }
@@ -500,7 +579,14 @@ export default function KanbanPage() {
           </div>
         </div>
       ) : (
-        <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+        <DndContext
+          sensors={sensors}
+          collisionDetection={pointerWithin}
+          onDragStart={handleDragStart}
+          onDragOver={handleDragOver}
+          onDragEnd={handleDragEnd}
+          onDragCancel={handleDragCancel}
+        >
           {/* Responsive Kanban: horizontal scroll with snap on mobile, flex row on desktop */}
           <div
             ref={scrollContainerRef}
@@ -529,12 +615,24 @@ export default function KanbanPage() {
                       onToggleHidden={() => toggleColumnHidden(column.id)}
                       onArchiveAll={(ids, title) => setShowArchiveConfirm({ ids, title })}
                       isExpanded={!hiddenColumns[column.id] || !column.hideable}
+                      activeId={activeId}
+                      isDropTarget={activeColumnId === column.id && activeId !== null}
                     />
                   </div>
                 )
               })}
             </div>
           </div>
+
+          {/* Drag Overlay - shows floating card during drag */}
+          <DragOverlay dropAnimation={{
+            duration: 200,
+            easing: 'cubic-bezier(0.18, 0.67, 0.6, 1.22)',
+          }}>
+            {activeJob ? (
+              <JobCardOverlay job={activeJob} />
+            ) : null}
+          </DragOverlay>
         </DndContext>
       )}
 

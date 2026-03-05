@@ -714,7 +714,7 @@ export default function SettingsPage() {
             <div className="flex justify-between">
               <span className="text-slate-600 dark:text-slate-400">Report a Bug</span>
               <a
-                href="https://github.com/anthropics/claude-code/issues"
+                href="https://github.com/wjamhoury/huntboard/issues"
                 target="_blank"
                 rel="noopener noreferrer"
                 className="text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300 flex items-center gap-1"

@@ -292,7 +292,7 @@ export default function LandingPage() {
                 Terms
               </Link>
               <a
-                href="https://github.com/williamjamhoury"
+                href="https://github.com/wjamhoury/huntboard"
                 target="_blank"
                 rel="noopener noreferrer"
                 className="hover:text-white transition-colors"

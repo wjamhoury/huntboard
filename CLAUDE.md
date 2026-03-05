@@ -197,6 +197,7 @@ Set `AUTH_DEV_MODE=true` (backend) and `VITE_AUTH_DEV_MODE=true` (frontend) to b
 
 | Feature | Files |
 |---------|-------|
+| Kanban Board | `frontend/src/pages/KanbanPage.jsx`, `components/kanban/` |
 | Swipe Triage | `frontend/src/pages/TriagePage.jsx`, `hooks/useTriageJobs.js` |
 | AI Scoring | `backend/app/services/claude_client.py`, `nightly_sync.py`, `routers/batch.py` |
 | Source Templates | `backend/app/services/source_templates.py`, `routers/sources.py` |
@@ -205,6 +206,25 @@ Set `AUTH_DEV_MODE=true` (backend) and `VITE_AUTH_DEV_MODE=true` (frontend) to b
 | Email Digests | `backend/app/services/email_service.py`, `digest_scheduler.py` |
 | CSV Export | `backend/app/routers/jobs.py` (`/export/csv`) |
 | Mobile UI | `frontend/src/components/mobile/MobileBottomNav.jsx`, `MobileFilterSheet.jsx` |
+
+### Kanban Drag-and-Drop
+
+The Kanban board uses `@dnd-kit/core` for drag-and-drop functionality with the following architecture:
+
+**Components:**
+- `KanbanPage.jsx` — Main page with `DndContext`, `DragOverlay`, and drag event handlers
+- `KanbanColumn.jsx` — Droppable column using `useDroppable` hook
+- `JobCard.jsx` — Sortable card using `useSortable` hook, shows placeholder when dragging
+- `JobCardOverlay.jsx` — Floating card preview shown during drag
+
+**Key Features:**
+- **DragOverlay** — Shows a lifted card preview with shadow during drag
+- **Droppable Columns** — Each column is a drop target with visual highlighting
+- **Optimistic Updates** — Status changes update UI immediately, rollback on API failure
+- **Touch Support** — Long-press (200ms) activates drag on mobile without interfering with scroll
+- **Placeholder** — Original card position shows a dashed placeholder during drag
+
+**Collision Detection:** Uses `pointerWithin` for reliable cross-column drops
 
 ## AI Scoring Pipeline
 

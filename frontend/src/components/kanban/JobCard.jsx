@@ -61,11 +61,22 @@ export default function JobCard({ job, onClick, isDragging, isSelectMode, isSele
 
   const hasOverdueFollowUp = isFollowUpDue(job.follow_up_date)
 
+  // When this card is being dragged, show a placeholder
+  if (isDragging) {
+    return (
+      <div
+        ref={setNodeRef}
+        style={style}
+        className="bg-slate-200 dark:bg-slate-600 rounded-lg p-3 md:p-4 border-2 border-dashed border-slate-300 dark:border-slate-500 min-h-[80px]"
+      />
+    )
+  }
+
   return (
     <div
       ref={setNodeRef}
       style={style}
-      className={`bg-white dark:bg-slate-700 rounded-lg p-3 md:p-4 shadow-sm border-l-4 ${priorityColors[job.priority] || 'border-l-gray-400'} cursor-pointer hover:shadow-md active:shadow-lg transition-shadow touch-manipulation ${isDragging ? 'opacity-50' : ''} ${isSelected ? 'ring-2 ring-blue-500' : ''} ${hasOverdueFollowUp ? 'ring-2 ring-red-500 dark:ring-red-400' : ''}`}
+      className={`bg-white dark:bg-slate-700 rounded-lg p-3 md:p-4 shadow-sm border-l-4 ${priorityColors[job.priority] || 'border-l-gray-400'} cursor-pointer hover:shadow-md active:shadow-lg transition-shadow touch-manipulation ${isSelected ? 'ring-2 ring-blue-500' : ''} ${hasOverdueFollowUp ? 'ring-2 ring-red-500 dark:ring-red-400' : ''}`}
       onClick={handleClick}
     >
       <div className="flex items-start justify-between">

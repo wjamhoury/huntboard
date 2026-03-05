@@ -63,11 +63,37 @@ export function useUpdateJob() {
       const response = await jobsApi.update(id, data)
       return response.data
     },
-    onSuccess: (data) => {
-      queryClient.invalidateQueries({ queryKey: ['jobs'] })
-      queryClient.setQueryData(['jobs', data.id], data)
+    // Optimistic update for instant UI feedback
+    onMutate: async ({ id, data }) => {
+      // Cancel any outgoing refetches
+      await queryClient.cancelQueries({ queryKey: ['jobs'] })
+
+      // Snapshot previous values for all job queries
+      const previousQueries = queryClient.getQueriesData({ queryKey: ['jobs'] })
+
+      // Optimistically update jobs in all matching query caches
+      queryClient.setQueriesData({ queryKey: ['jobs'] }, (old) => {
+        if (!Array.isArray(old)) return old
+        return old.map((job) =>
+          job.id === id ? { ...job, ...data } : job
+        )
+      })
+
+      return { previousQueries }
     },
-    onError: (error) => handleApiError(error),
+    onError: (error, variables, context) => {
+      // Rollback to previous state on error
+      if (context?.previousQueries) {
+        context.previousQueries.forEach(([queryKey, data]) => {
+          queryClient.setQueryData(queryKey, data)
+        })
+      }
+      handleApiError(error)
+    },
+    onSettled: () => {
+      // Refetch after success or error to ensure consistency
+      queryClient.invalidateQueries({ queryKey: ['jobs'] })
+    },
   })
 }
 

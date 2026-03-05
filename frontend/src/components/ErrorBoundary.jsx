@@ -50,11 +50,11 @@ class ErrorBoundary extends Component {
       try {
         window.__SENTRY__.showReportDialog({ eventId: this.state.eventId })
       } catch (e) {
-        window.open('https://github.com/anthropics/claude-code/issues', '_blank')
+        window.open('https://github.com/wjamhoury/huntboard/issues', '_blank')
       }
     } else {
       // Fallback to GitHub issues
-      window.open('https://github.com/anthropics/claude-code/issues', '_blank')
+      window.open('https://github.com/wjamhoury/huntboard/issues', '_blank')
     }
   }
 
