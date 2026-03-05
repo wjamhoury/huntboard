@@ -240,10 +240,16 @@ All job match score displays use a shared utility for consistent colors across t
 
 **Exports:**
 - `getScoreBadgeClasses(score)` — Tailwind classes for badge background + text
+- `getScoreBorderClass(score)` — Tailwind classes for left border on job cards
 - `getScoreTextClasses(score)` — Tailwind classes for text color only
 - `getScoreStrokeClass(score)` — SVG stroke classes for circular progress
 - `getScoreHexColor(score)` — Hex color for charts
 - `SCORE_RANGE_COLORS` — Color map for histogram ranges
+
+**Job Card Visual Indicators:**
+- **Left border** — Colored based on match_score (green=80+, yellow=60-79, orange=40-59, red=0-39, gray=unscored)
+- **Score badge** — Shows numeric score with matching background color
+- Both use the shared `scoreColors.js` utility for consistency
 
 ### Page Structure
 
