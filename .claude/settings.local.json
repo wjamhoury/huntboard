@@ -53,7 +53,13 @@
       "Bash(make deploy-backend:*)",
       "Bash(make deploy-all:*)",
       "Bash(bash scripts/deploy-frontend.sh:*)",
-      "Bash(git add:*)"
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(git push:*)",
+      "Bash(aws s3:*)",
+      "Bash(git restore:*)",
+      "Bash(gh run list:*)",
+      "Bash(npm audit:*)"
     ]
   }
 }

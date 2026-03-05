@@ -1,5 +1,6 @@
 import { MapPin, DollarSign, Target, FileText, Bell } from 'lucide-react'
 import { isFollowUpDue } from './constants'
+import { getScoreBadgeClasses } from '../../utils/scoreColors'
 
 const priorityColors = {
   1: 'border-l-red-500',
@@ -53,17 +54,7 @@ export default function JobCardOverlay({ job }) {
         <div className="flex items-center gap-1">
           {job.match_score != null && (
             <span
-              className={`flex items-center gap-1 px-1.5 py-0.5 rounded font-medium ${
-                job.match_score >= 90
-                  ? 'bg-green-100 dark:bg-green-900 text-green-800 dark:text-green-200'
-                  : job.match_score >= 75
-                  ? 'bg-emerald-100 dark:bg-emerald-900 text-emerald-800 dark:text-emerald-200'
-                  : job.match_score >= 50
-                  ? 'bg-yellow-100 dark:bg-yellow-900 text-yellow-800 dark:text-yellow-200'
-                  : job.match_score >= 30
-                  ? 'bg-orange-100 dark:bg-orange-900 text-orange-800 dark:text-orange-200'
-                  : 'bg-red-100 dark:bg-red-900 text-red-800 dark:text-red-200'
-              }`}
+              className={`flex items-center gap-1 px-1.5 py-0.5 rounded font-medium ${getScoreBadgeClasses(job.match_score)}`}
             >
               <Target size={10} />
               {job.match_score}
