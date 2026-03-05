@@ -51,6 +51,26 @@ export function getScoreTextClasses(score) {
 }
 
 /**
+ * Get Tailwind CSS class for left border color on job cards
+ * @param {number} score - The match score (0-100)
+ * @returns {string} Tailwind CSS border-l class
+ */
+export function getScoreBorderClass(score) {
+  if (score == null) return 'border-l-slate-400'
+
+  if (score >= 80) {
+    return 'border-l-green-500'
+  }
+  if (score >= 60) {
+    return 'border-l-yellow-500'
+  }
+  if (score >= 40) {
+    return 'border-l-orange-500'
+  }
+  return 'border-l-red-500'
+}
+
+/**
  * Get SVG stroke color class for circular progress indicators
  * @param {number} score - The match score (0-100)
  * @returns {string} Tailwind CSS stroke class

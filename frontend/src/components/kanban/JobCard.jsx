@@ -2,7 +2,7 @@ import { useSortable } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
 import { MapPin, DollarSign, GripVertical, CheckSquare, Square, Target, FileText, Bell } from 'lucide-react'
 import { isFollowUpDue, formatFollowUpDate } from './constants'
-import { getScoreBadgeClasses } from '../../utils/scoreColors'
+import { getScoreBadgeClasses, getScoreBorderClass } from '../../utils/scoreColors'
 
 // Map source values to display labels
 const SOURCE_LABELS = {
@@ -42,14 +42,6 @@ export default function JobCard({ job, onClick, isDragging, isSelectMode, isSele
     transition,
   }
 
-  const priorityColors = {
-    1: 'border-l-red-500',
-    2: 'border-l-orange-500',
-    3: 'border-l-yellow-500',
-    4: 'border-l-green-500',
-    5: 'border-l-gray-400',
-  }
-
   const daysAgo = Math.floor((new Date() - new Date(job.created_at)) / (1000 * 60 * 60 * 24))
 
   const handleClick = () => {
@@ -77,7 +69,7 @@ export default function JobCard({ job, onClick, isDragging, isSelectMode, isSele
     <div
       ref={setNodeRef}
       style={style}
-      className={`bg-white dark:bg-slate-700 rounded-lg p-3 md:p-4 shadow-sm border-l-4 ${priorityColors[job.priority] || 'border-l-gray-400'} cursor-pointer hover:shadow-md active:shadow-lg transition-shadow touch-manipulation ${isSelected ? 'ring-2 ring-blue-500' : ''} ${hasOverdueFollowUp ? 'ring-2 ring-red-500 dark:ring-red-400' : ''}`}
+      className={`bg-white dark:bg-slate-700 rounded-lg p-3 md:p-4 shadow-sm border-l-4 ${getScoreBorderClass(job.match_score)} cursor-pointer hover:shadow-md active:shadow-lg transition-shadow touch-manipulation ${isSelected ? 'ring-2 ring-blue-500' : ''} ${hasOverdueFollowUp ? 'ring-2 ring-red-500 dark:ring-red-400' : ''}`}
       onClick={handleClick}
     >
       <div className="flex items-start justify-between">

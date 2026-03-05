@@ -1,14 +1,6 @@
 import { MapPin, DollarSign, Target, FileText, Bell } from 'lucide-react'
 import { isFollowUpDue } from './constants'
-import { getScoreBadgeClasses } from '../../utils/scoreColors'
-
-const priorityColors = {
-  1: 'border-l-red-500',
-  2: 'border-l-orange-500',
-  3: 'border-l-yellow-500',
-  4: 'border-l-green-500',
-  5: 'border-l-gray-400',
-}
+import { getScoreBadgeClasses, getScoreBorderClass } from '../../utils/scoreColors'
 
 /**
  * A simplified job card component used as the drag overlay.
@@ -20,7 +12,7 @@ export default function JobCardOverlay({ job }) {
 
   return (
     <div
-      className={`bg-white dark:bg-slate-700 rounded-lg p-3 md:p-4 shadow-xl border-l-4 ${priorityColors[job.priority] || 'border-l-gray-400'} cursor-grabbing w-72 rotate-2 scale-105 ${hasOverdueFollowUp ? 'ring-2 ring-red-500 dark:ring-red-400' : ''}`}
+      className={`bg-white dark:bg-slate-700 rounded-lg p-3 md:p-4 shadow-xl border-l-4 ${getScoreBorderClass(job.match_score)} cursor-grabbing w-72 rotate-2 scale-105 ${hasOverdueFollowUp ? 'ring-2 ring-red-500 dark:ring-red-400' : ''}`}
       style={{
         boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25), 0 0 0 1px rgba(0, 0, 0, 0.05)',
       }}
