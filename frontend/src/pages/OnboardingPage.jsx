@@ -4,7 +4,7 @@ import { useQueryClient } from '@tanstack/react-query'
 import toast from 'react-hot-toast'
 import {
   Briefcase, Upload, FileText, Building2, Rss, Check, ChevronRight,
-  ChevronLeft, Loader2, Sparkles, Rocket, Target, X, Plus
+  ChevronLeft, ChevronDown, Loader2, Sparkles, Rocket, Target, X, Plus, Linkedin
 } from 'lucide-react'
 import { useAuth } from '../auth/AuthProvider'
 import { useResumes, useUploadResume } from '../hooks/useResumes'
@@ -68,6 +68,44 @@ function WelcomeStep({ onNext }) {
   )
 }
 
+// LinkedIn PDF tip component
+function LinkedInPdfTip() {
+  const [isExpanded, setIsExpanded] = useState(false)
+
+  return (
+    <div className="bg-sky-50 dark:bg-sky-900/20 border border-sky-200 dark:border-sky-800 rounded-lg p-4 max-w-sm mx-auto text-left">
+      <div className="flex items-start gap-3">
+        <div className="w-8 h-8 bg-sky-100 dark:bg-sky-800 rounded-full flex items-center justify-center flex-shrink-0">
+          <Linkedin size={16} className="text-sky-600 dark:text-sky-400" />
+        </div>
+        <div className="flex-1 min-w-0">
+          <p className="text-sm text-slate-600 dark:text-slate-400">
+            Don't have a resume handy? You can export your LinkedIn profile as a PDF instead.
+          </p>
+          <button
+            onClick={() => setIsExpanded(!isExpanded)}
+            className="inline-flex items-center gap-1 text-sm text-sky-600 dark:text-sky-400 hover:text-sky-700 dark:hover:text-sky-300 font-medium mt-2"
+          >
+            How to export
+            <ChevronDown
+              size={16}
+              className={`transition-transform ${isExpanded ? 'rotate-180' : ''}`}
+            />
+          </button>
+          {isExpanded && (
+            <ol className="mt-3 text-sm text-slate-600 dark:text-slate-400 space-y-1.5 list-decimal list-inside">
+              <li>Go to your LinkedIn profile</li>
+              <li>Click the "More" button below your headline</li>
+              <li>Select "Save to PDF"</li>
+              <li>Upload the downloaded PDF here</li>
+            </ol>
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}
+
 // Step 2: Resume Upload
 function ResumeStep({ onNext, onSkip }) {
   const fileInputRef = useRef(null)
@@ -127,23 +165,28 @@ function ResumeStep({ onNext, onSkip }) {
           </div>
         </div>
       ) : (
-        <button
-          onClick={() => fileInputRef.current?.click()}
-          disabled={uploadResume.isPending}
-          className="inline-flex items-center justify-center gap-2 px-6 py-3.5 md:py-3 bg-purple-600 hover:bg-purple-700 text-white font-medium rounded-lg transition-colors mb-6 disabled:opacity-50 w-full md:w-auto"
-        >
-          {uploadResume.isPending ? (
-            <>
-              <Loader2 size={20} className="animate-spin" />
-              Uploading...
-            </>
-          ) : (
-            <>
-              <Upload size={20} />
-              Upload PDF Resume
-            </>
-          )}
-        </button>
+        <>
+          <button
+            onClick={() => fileInputRef.current?.click()}
+            disabled={uploadResume.isPending}
+            className="inline-flex items-center justify-center gap-2 px-6 py-3.5 md:py-3 bg-purple-600 hover:bg-purple-700 text-white font-medium rounded-lg transition-colors mb-4 disabled:opacity-50 w-full md:w-auto"
+          >
+            {uploadResume.isPending ? (
+              <>
+                <Loader2 size={20} className="animate-spin" />
+                Uploading...
+              </>
+            ) : (
+              <>
+                <Upload size={20} />
+                Upload PDF Resume
+              </>
+            )}
+          </button>
+          <div className="mb-6">
+            <LinkedInPdfTip />
+          </div>
+        </>
       )}
 
       <div className="flex flex-col md:flex-row items-center justify-center gap-3 md:gap-4 mt-6 md:mt-8">

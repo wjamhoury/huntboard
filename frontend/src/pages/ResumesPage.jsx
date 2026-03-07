@@ -1,9 +1,47 @@
 import { useState, useRef } from 'react'
-import { FileText, Upload, Trash2, Star, X } from 'lucide-react'
+import { FileText, Upload, Trash2, Star, X, ChevronDown, Linkedin } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { useResumes, useUploadResume, useSetPrimaryResume, useDeleteResume, useResumeText } from '../hooks/useResumes'
 import { SkeletonResumeItem } from '../components/ui/Skeleton'
 import { ConfirmModal } from '../components/ui'
+
+// LinkedIn PDF tip component
+function LinkedInPdfTip() {
+  const [isExpanded, setIsExpanded] = useState(false)
+
+  return (
+    <div className="bg-sky-50 dark:bg-sky-900/20 border border-sky-200 dark:border-sky-800 rounded-lg p-4 text-left">
+      <div className="flex items-start gap-3">
+        <div className="w-8 h-8 bg-sky-100 dark:bg-sky-800 rounded-full flex items-center justify-center flex-shrink-0">
+          <Linkedin size={16} className="text-sky-600 dark:text-sky-400" />
+        </div>
+        <div className="flex-1 min-w-0">
+          <p className="text-sm text-slate-600 dark:text-slate-400">
+            Don't have a resume handy? You can export your LinkedIn profile as a PDF instead.
+          </p>
+          <button
+            onClick={() => setIsExpanded(!isExpanded)}
+            className="inline-flex items-center gap-1 text-sm text-sky-600 dark:text-sky-400 hover:text-sky-700 dark:hover:text-sky-300 font-medium mt-2"
+          >
+            How to export
+            <ChevronDown
+              size={16}
+              className={`transition-transform ${isExpanded ? 'rotate-180' : ''}`}
+            />
+          </button>
+          {isExpanded && (
+            <ol className="mt-3 text-sm text-slate-600 dark:text-slate-400 space-y-1.5 list-decimal list-inside">
+              <li>Go to your LinkedIn profile</li>
+              <li>Click the "More" button below your headline</li>
+              <li>Select "Save to PDF"</li>
+              <li>Upload the downloaded PDF here</li>
+            </ol>
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}
 
 export default function ResumesPage() {
   const [selectedResume, setSelectedResume] = useState(null)
@@ -95,6 +133,10 @@ export default function ResumesPage() {
           <Upload size={18} />
           {uploadResume.isPending ? 'Uploading...' : 'Upload PDF Resume'}
         </button>
+
+        <div className="mt-4">
+          <LinkedInPdfTip />
+        </div>
 
         {isLoading ? (
           <div className="mt-6 space-y-3">
