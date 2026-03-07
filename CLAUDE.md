@@ -285,6 +285,14 @@ Job Import → Queue for Scoring → Hybrid Score (60% deterministic + 40% AI) �
 - `backend/app/services/nightly_sync.py` — Orchestrates import + scoring
 - `backend/app/routers/batch.py` — Manual scoring endpoints
 
+### Supported Resume Formats
+
+HuntBoard accepts PDF resumes for AI scoring. Users can upload:
+- Traditional PDF resumes
+- **LinkedIn PDF exports** — Users can export their LinkedIn profile as a PDF (Profile → More → Save to PDF) and upload it directly. The AI scorer handles LinkedIn PDFs just like traditional resumes.
+
+Both onboarding and the Resumes page include guidance on how to export a LinkedIn profile as PDF.
+
 ### Scoring Modes
 
 1. **With Resumes** — Full hybrid scoring:
